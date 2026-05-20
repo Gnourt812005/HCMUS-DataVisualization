@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vietnam Weather Analysis - Bản đồ & Thời gian mặt trời</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- D3.js Library -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Leaflet.js Library -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Đang tải dữ liệu khí tượng địa lý...</p>
+    </div>
+
+    <header>
+        <div class="header-title">
+            <h1>VIETNAM CLIMATE GEOSPATIAL & SUNLIGHT DASHBOARD</h1>
+            <p>Trực quan hóa Bản đồ nhiệt độ toàn quốc, Lượng mưa & Thời gian mặt trời mọc/lặn</p>
+        </div>
+        <div class="controls">
+            <label for="location-select">Tỉnh thành:</label>
+            <select id="location-select">
+                <!-- Điền động -->
+            </select>
+
+            <label for="year-select" style="margin-left: 8px;">Năm:</label>
+            <select id="year-select">
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+            </select>
+        </div>
+    </header>
+
+    <div id="error-banner">
+        <strong>Lỗi kết nối dữ liệu!</strong> Không thể tải file dữ liệu <code>dataset/dataset.csv</code>.
+        <br>Điều này thường xảy ra do lỗi bảo mật CORS khi mở file HTML trực tiếp (giao thức <code>file://</code>) trên
+        trình duyệt.
+        <br><br>
+        <strong>Cách khắc phục nhanh:</strong>
+        <br>1. Mở Terminal tại thư mục của dự án và chạy: <code>python3 -m http.server 8000</code> hoặc
+        <code>npx live-server</code>
+        <br>2. Truy cập đường dẫn: <code>http://localhost:8000/dashboard2.html</code> trên trình duyệt.
+    </div>
+
+    <div class="dashboard-grid">
+
+        <!-- CARD 1: Vietnam Temperature Map -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>Bản đồ Nhiệt độ trung bình toàn quốc</span>
+                </div>
+            </div>
+            <div id="map"></div>
+            <div class="legend-container" id="map-legend"></div>
+        </div>
+
+        <!-- Right Column of Charts -->
+        <div class="charts-column">
+
+            <!-- CARD 2: Precipitation Chart -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span id="precip-chart-title">Lượng mưa trung bình</span>
+                    </div>
+                    <div class="card-subtitle" id="precip-chart-subtitle">
+                        Lượng mưa tích lũy trung bình từng tháng
+                    </div>
+                </div>
+                <div class="chart-container" id="chart-precipitation">
+                    <!-- D3 chart -->
+                </div>
+                <div class="legend-container" id="legend-precipitation"></div>
+            </div>
+
+            <!-- CARD 3: Sunrise/Sunset Range Area Chart -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span id="sunrange-chart-title">Thời gian mặt trời mọc và mặt trời lặn</span>
+                    </div>
+                    <div class="card-subtitle" id="sunrange-chart-subtitle">
+                        Dao động thời gian bình minh, hoàng hôn và số giờ ban ngày trung bình theo tháng
+                    </div>
+                </div>
+                <div class="chart-container" id="chart-sunrange">
+                    <!-- D3 chart -->
+                </div>
+                <div class="legend-container" id="legend-sunrange"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Tooltips for map and charts -->
+    <div class="tooltip" id="main-tooltip"></div>
+    <div class="tooltip" id="tooltip-precipitation"></div>
+    <div class="tooltip" id="tooltip-sunrange"></div>
+
+    <script>
+        // Global State variables
+        let allData = [];
+        let geojsonData = null;
+        let geojsonLayer = null;
+        let locStats = new Map();
+        let currentLocation = "TP. Hồ Chí Minh";
+        let currentYear = "2024";
+        let monthlyStatsData = [];
+        
+        let map;
+
+        // Month Abbreviations
+        const monthNames = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"];
+
+        // Setup Custom Temperature Color Scale (Diverging: Green -> White -> Orange)
+        const tempColorScale = d3.scaleDiverging()
+            .domain([15, 22, 32]) // Min, Mid (balance point), Max
+            .interpolator(d3.interpolateRdYlGn); // A green-yellow-red scale, good for temperatures. We can customize.
+
+        // Let's create a custom Green-to-Orange interpolator
+        const customInterpolator = t => d3.interpolateRgb("green", "orange")(t);
+        const tempInterpolator = d3.interpolateRgbBasis(["#1a9850", "#ffffbf", "#d73027"]); // Green-Yellow-Red
+
+        tempColorScale.interpolator(tempInterpolator);
+
+        // Helper to get dimensions of chart containers dynamically
+        const getChartDimensions = (containerId, heightVal = 220) => {
+            const container = document.getElementById(containerId);
+            const width = container.clientWidth || 500;
+            return {
+                width: width,
+                height: heightVal,
+                margin: { top: 15, right: 30, bottom: 35, left: 55 }
+            };
+        };
+
+        const tooltip = d3.select("#main-tooltip");
+
+        // Helper to normalize province names for GeoJSON mapping
+        function normalizeName(text) {
+            if (!text) return "";
+            let s = text.toLowerCase();
+            s = s.replace(/đ/g, "d");
+            s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            s = s.replace(/province/g, "")
+                .replace(/city/g, "")
+                .replace(/tp\./g, "")
+                .replace(/thành phố/g, "")
+                .replace(/thanh pho/g, "");
+            s = s.replace(/[^a-z0-9]/g, "");
+            return s;
+        }
+
+        // Style function for GeoJSON features
+        function styleFeature(feature) {
+            const normGeoName = normalizeName(feature.properties.Name);
+            const stats = locStats.get(normGeoName);
+            const isSelected = stats ? (stats.originalName === currentLocation) : false;
+
+            const fillColor = stats && !isNaN(stats.avgTemp) ? tempColorScale(stats.avgTemp) : '#151c2c';
+
+            return {
+                fillColor: fillColor,
+                weight: isSelected ? 2 : 0.8,
+                opacity: 1,
+                color: isSelected ? '#ffffff' : '#243049',
+                fillOpacity: isSelected ? 0.9 : 0.7
+            };
+        }
+
+        // Interactivity setup for each GeoJSON feature
+        function onEachFeature(feature, layer) {
+            const normGeoName = normalizeName(feature.properties.Name);
+
+            layer.on({
+                mouseover: function (e) {
+                    const stats = locStats.get(normGeoName);
+                    if (!stats) return;
+
+                    const name = stats.originalName;
+
+                    layer.setStyle({
+                        weight: 2,
+                        color: '#ffffff',
+                        fillOpacity: 0.85
+                    });
+
+                    tooltip.style("opacity", 1);
+                    tooltip.html(`
+                        <div class="tooltip-title">${name}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nhiệt độ TB:</span>
+                            <span class="tooltip-val" style="color:${tempColorScale(stats.avgTemp)}">${stats.avgTemp.toFixed(1)}°C</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Lượng mưa tháng:</span>
+                            <span class="tooltip-val" style="color:#60a5fa">${stats.totalPrecip ? stats.totalPrecip.toFixed(1) + ' mm' : '0.0 mm'}</span>
+                        </div>
+                        <div class="tooltip-row" style="margin-top:4px; border-top:1px dashed var(--border-color); padding-top:4px;">
+                            <span class="tooltip-label">Bình minh TB:</span>
+                            <span class="tooltip-val" style="color:#fbbf24">${decimalHoursToTimeString(stats.sunrise_avg)}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Hoàng hôn TB:</span>
+                            <span class="tooltip-val" style="color:#ec4899">${decimalHoursToTimeString(stats.sunset_avg)}</span>
+                        </div>
+                    `);
+                },
+                mousemove: function (e) {
+                    tooltip
+                        .style("left", (e.originalEvent.pageX + 15) + "px")
+                        .style("top", (e.originalEvent.pageY - 15) + "px");
+                },
+                mouseout: function (e) {
+                    const stats = locStats.get(normGeoName);
+                    if (!stats) return;
+
+                    const name = stats.originalName;
+                    const isSelected = name === currentLocation;
+
+                    layer.setStyle({
+                        weight: isSelected ? 2 : 0.8,
+                        color: isSelected ? '#ffffff' : '#243049',
+                        fillOpacity: isSelected ? 0.9 : 0.7
+                    });
+                    tooltip.style("opacity", 0);
+                },
+                click: function (e) {
+                    const stats = locStats.get(normGeoName);
+                    if (stats) {
+                        selectProvince(stats.originalName);
+                    }
+                }
+            });
+        }
+
+        // Helper to convert time string (e.g. "05:46 AM") to decimal hours
+        function timeToDecimalHours(timeStr) {
+            if (!timeStr) return null;
+            const match = timeStr.trim().match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+            if (!match) return null;
+            let hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+            const ampm = match[3].toUpperCase();
+            if (ampm === "PM" && hours < 12) hours += 12;
+            if (ampm === "AM" && hours === 12) hours = 0;
+            return hours + (minutes / 60);
+        }
+
+        // Helper to convert decimal hours back to time string
+        function decimalHoursToTimeString(decimalHours) {
+            if (decimalHours === null || isNaN(decimalHours)) return "N/A";
+            const hours = Math.floor(decimalHours);
+            const minutes = Math.round((decimalHours - hours) * 60);
+            let finalHours = hours;
+            let finalMinutes = minutes;
+            if (finalMinutes === 60) {
+                finalMinutes = 0;
+                finalHours += 1;
+            }
+            const displayHours = finalHours % 12 === 0 ? 12 : finalHours % 12;
+            const ampm = finalHours >= 12 ? "PM" : "AM";
+            return `${displayHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')} ${ampm}`;
+        }
+
+        // Helper to format duration in hours
+        function formatDuration(hoursDec) {
+            if (hoursDec === null || isNaN(hoursDec)) return "N/A";
+            const hours = Math.floor(hoursDec);
+            const minutes = Math.round((hoursDec - hours) * 60);
+            let finalHours = hours;
+            let finalMinutes = minutes;
+            if (finalMinutes === 60) {
+                finalMinutes = 0;
+                finalHours += 1;
+            }
+            return `${finalHours} giờ ${finalMinutes} phút`;
+        }
+
+        // Compute monthly aggregated stats for selected province and year
+        function getMonthlyStats() {
+            let filtered = allData.filter(d => d['location.name'] === currentLocation);
+            if (currentYear !== "all") {
+                filtered = filtered.filter(d => d.year === parseInt(currentYear));
+            }
+
+            const monthGroups = d3.group(filtered, d => d.month);
+            const stats = [];
+
+            for (let m = 0; m < 12; m++) {
+                const days = monthGroups.get(m) || [];
+                const hasData = days.length > 0;
+
+                const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), d => d.year);
+                const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
+
+                const avgSunrise = hasData ? d3.mean(days.filter(d => d.sunrise_hours !== null), d => d.sunrise_hours) : null;
+                const avgSunset = hasData ? d3.mean(days.filter(d => d.sunset_hours !== null), d => d.sunset_hours) : null;
+                const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
+
+                stats.push({
+                    month: m,
+                    monthName: monthNames[m],
+                    avgPrecip: avgPrecip,
+                    avgSunrise: avgSunrise,
+                    avgSunset: avgSunset,
+                    daylightDuration: avgDaylight,
+                    hasData: hasData
+                });
+            }
+            return stats;
+        }
+
+        // Expose shared highlight function for synchronization
+        window.highlightMonth = function(monthIndex, event, source) {
+            const tooltipPrecip = d3.select("#tooltip-precipitation");
+            const tooltipSunrange = d3.select("#tooltip-sunrange");
+
+            if (monthIndex === null) {
+                // Hide all highlights
+                d3.selectAll(".precip-bar")
+                    .style("fill-opacity", null)
+                    .style("stroke", null);
+                
+                d3.select("#sunrange-track-line").style("display", "none");
+                d3.select("#sunrange-sunrise-dot").style("display", "none");
+                d3.select("#sunrange-sunset-dot").style("display", "none");
+                
+                tooltipPrecip.style("opacity", 0);
+                tooltipSunrange.style("opacity", 0);
+                return;
+            }
+
+            const stats = monthlyStatsData[monthIndex];
+            if (!stats) return;
+
+            // 1. Highlight precipitation bar
+            d3.selectAll(".precip-bar")
+                .style("fill-opacity", d => d.month === monthIndex ? 1.0 : 0.4)
+                .style("stroke", d => d.month === monthIndex ? "#ffffff" : null)
+                .style("stroke-width", d => d.month === monthIndex ? 1.5 : null);
+
+            // 2. Highlight sunrise/sunset range chart
+            if (window.sunrangeXScale && window.sunrangeYScale) {
+                const xPos = window.sunrangeXScale(stats.monthName);
+                d3.select("#sunrange-track-line")
+                    .attr("x1", xPos)
+                    .attr("x2", xPos)
+                    .style("display", null);
+
+                if (stats.avgSunrise !== null && stats.avgSunset !== null) {
+                    d3.select("#sunrange-sunrise-dot")
+                        .attr("cx", xPos)
+                        .attr("cy", window.sunrangeYScale(stats.avgSunrise))
+                        .style("display", null);
+                    d3.select("#sunrange-sunset-dot")
+                        .attr("cx", xPos)
+                        .attr("cy", window.sunrangeYScale(stats.avgSunset))
+                        .style("display", null);
+                }
+            }
+
+            // 3. Populate and show precipitation tooltip
+            tooltipPrecip.style("opacity", 1);
+            tooltipPrecip.html(`
+                <div class="tooltip-title" style="color: #60a5fa; border-bottom-color: rgba(96, 165, 250, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Lượng mưa TB:</span>
+                    <span class="tooltip-val" style="color:#60a5fa">${stats.avgPrecip.toFixed(1)} mm</span>
+                </div>
+            `);
+
+            // 4. Populate and show sunrise/sunset tooltip
+            tooltipSunrange.style("opacity", 1);
+            tooltipSunrange.html(`
+                <div class="tooltip-title" style="color: var(--warning-color); border-bottom-color: rgba(251, 191, 36, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Mặt trời mọc:</span>
+                    <span class="tooltip-val" style="color:var(--warning-color); font-weight:bold;">${decimalHoursToTimeString(stats.avgSunrise)}</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Mặt trời lặn:</span>
+                    <span class="tooltip-val" style="color:var(--sunset-color); font-weight:bold;">${decimalHoursToTimeString(stats.avgSunset)}</span>
+                </div>
+                <div class="tooltip-row" style="margin-top:4px; border-top:1px dashed var(--border-color); padding-top:4px;">
+                    <span class="tooltip-label">Độ dài ngày TB:</span>
+                    <span class="tooltip-val" style="color:#10b981; font-weight:bold;">${formatDuration(stats.daylightDuration)}</span>
+                </div>
+            `);
+
+            // 5. Position tooltips depending on hover source
+            if (source === "precip") {
+                // Follow mouse on precip chart
+                tooltipPrecip
+                    .style("left", (event.pageX + 15) + "px")
+                    .style("top", (event.pageY - 15) + "px");
+
+                // Place next to sunrise dot on sunrange chart
+                const sunrangeDot = document.getElementById("sunrange-sunrise-dot");
+                if (sunrangeDot && stats.avgSunrise !== null) {
+                    const rect = sunrangeDot.getBoundingClientRect();
+                    tooltipSunrange
+                        .style("left", (rect.left + window.scrollX + 15) + "px")
+                        .style("top", (rect.top + window.scrollY - 15) + "px");
+                } else {
+                    tooltipSunrange.style("opacity", 0);
+                }
+            } else if (source === "sunrange") {
+                // Follow mouse on sunrange chart
+                tooltipSunrange
+                    .style("left", (event.pageX + 15) + "px")
+                    .style("top", (event.pageY - 15) + "px");
+
+                // Place next to precip bar
+                const activeBar = d3.selectAll(".precip-bar").filter(d => d.month === monthIndex).node();
+                if (activeBar) {
+                    const rect = activeBar.getBoundingClientRect();
+                    tooltipPrecip
+                        .style("left", (rect.left + rect.width / 2 + window.scrollX + 15) + "px")
+                        .style("top", (rect.top + window.scrollY - 15) + "px");
+                } else {
+                    tooltipPrecip.style("opacity", 0);
+                }
+            }
+        };
+
+        // Load Dataset and GeoJSON
+        Promise.all([
+            d3.csv("../dataset/dataset.csv"),
+            d3.json("../dataset/vietnam-provinces.geojson")
+        ]).then(([data, geojson]) => {
+            geojsonData = geojson;
+
+            // Process columns
+            data.forEach(d => {
+                d['day.avgtemp_c'] = +d['day.avgtemp_c'];
+                d['day.totalprecip_mm'] = +d['day.totalprecip_mm'];
+                d['location.lat'] = +d['location.lat'];
+                d['location.lon'] = +d['location.lon'];
+
+                d.dateParsed = d3.timeParse("%Y-%m-%d")(d.date);
+                d.month = d.dateParsed ? d.dateParsed.getMonth() : null; // 0-11
+                d.year = d.dateParsed ? d.dateParsed.getFullYear() : null;
+
+                d.sunrise_hours = timeToDecimalHours(d['astro.sunrise']);
+                d.sunset_hours = timeToDecimalHours(d['astro.sunset']);
+                d.daylight_hours = (d.sunrise_hours !== null && d.sunset_hours !== null) ? (d.sunset_hours - d.sunrise_hours) : null;
+            });
+
+            allData = data;
+
+            // Hide loading banner
+            d3.select("#loading")
+                .transition()
+                .duration(500)
+                .style("opacity", 0)
+                .on("end", function () {
+                    d3.select(this).style("display", "none");
+                });
+
+            // Populate Location Dropdown
+            const uniqueLocations = Array.from(new Set(data.map(d => d['location.name']))).sort();
+            const locationSelect = d3.select("#location-select");
+            locationSelect.selectAll("option")
+                .data(uniqueLocations)
+                .enter()
+                .append("option")
+                .attr("value", d => d)
+                .property("selected", d => d === currentLocation)
+                .text(d => d);
+
+            // Populate Dropdown Change Listeners
+            locationSelect.on("change", function () {
+                selectProvince(this.value);
+            });
+
+            d3.select("#year-select").on("change", function () {
+                currentYear = this.value;
+                updateCharts();
+            });
+
+            // Initialize Map
+            initMap();
+
+            // Initial Render of All Visuals
+            updateCharts();
+
+            if (map) {
+                map.invalidateSize();
+                if (geojsonLayer) {
+                    try {
+                        map.fitBounds(geojsonLayer.getBounds());
+                    } catch (e) {}
+                }
+            }
+
+            // Responsive behavior
+            window.addEventListener("resize", debounce(() => {
+                if (map) map.invalidateSize();
+                updateCharts();
+            }, 250));
+
+        }).catch(err => {
+            console.error("Lỗi tải dữ liệu CSV hoặc GeoJSON:", err);
+            d3.select("#loading").style("display", "none");
+            d3.select("#error-banner").style("display", "block");
+        });
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function (...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // Initialize Leaflet Map
+        function initMap() {
+            let initialZoom = window.innerWidth < 768 ? 5 : 5.8;
+            map = L.map('map', {
+                zoomControl: true,
+                scrollWheelZoom: false
+            }).setView([16.4, 107.5], initialZoom); // Center on Vietnam coordinates
+
+            // CartoDB Dark Matter tile layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            // Add GeoJSON boundaries if available
+            if (geojsonData) {
+                geojsonLayer = L.geoJSON(geojsonData, {
+                    style: styleFeature,
+                    onEachFeature: onEachFeature
+                }).addTo(map);
+
+                // Auto-center and zoom map on Vietnam boundaries
+                try {
+                    map.fitBounds(geojsonLayer.getBounds());
+                } catch (e) {
+                    console.warn("Could not fit bounds of GeoJSON layer:", e);
+                }
+            }
+        }
+
+        // Highlight selected province marker on the map
+        function highlightMapMarker(provinceName) {
+            if (geojsonLayer) {
+                geojsonLayer.setStyle(styleFeature);
+            }
+        }
+
+        // Select a province and propagate to dashboard
+        function selectProvince(provinceName) {
+            currentLocation = provinceName;
+            
+            // Update UI elements
+            d3.select("#location-select").property("value", provinceName);
+            d3.select("#sunrange-chart-subtitle").text(`Dao động thời gian bình minh, hoàng hôn và số giờ ban ngày trung bình theo tháng tại ${provinceName}`);
+            
+            updatePrecipitationSubtitle();
+
+            // Highlight Map Marker
+            highlightMapMarker(provinceName);
+            
+            // Re-render dependent charts
+            drawSunrangeChart();
+            drawPrecipitationChart();
+        }
+
+        function updatePrecipitationSubtitle() {
+            const subtitle = d3.select("#precip-chart-subtitle");
+            const title = d3.select("#precip-chart-title");
+        }
+
+        // Render Map Legend
+        function drawMapLegend() {
+            const legendDiv = d3.select("#map-legend");
+            legendDiv.selectAll("*").remove();
+
+            const temps = Array.from(locStats.values()).map(d => d.avgTemp).filter(t => !isNaN(t) && t !== null);
+            const minTemp = temps.length > 0 ? d3.min(temps) : 15;
+            const maxTemp = temps.length > 0 ? d3.max(temps) : 32;
+
+            legendDiv.append("div").html(`
+                <div style="display: flex; flex-direction: column; width: 100%; gap: 6px;">
+                    <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Nhiệt độ trung bình (°C)</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-secondary); width: 100%;">
+                        <span>${minTemp.toFixed(1)}°C</span>
+                        <div style="flex-grow: 1; margin: 0 12px; height: 8px; border-radius: 4px; background: linear-gradient(to right, #1a9850, #ffffbf, #d73027);"></div>
+                        <span>${maxTemp.toFixed(1)}°C</span>
+                    </div>
+                </div>
+            `);
+        }
+
+        // Main orchestrator to update all visualizations
+        function updateCharts() {
+            // Compute shared monthly aggregated data
+            monthlyStatsData = getMonthlyStats();
+
+            // 1. Process Map Markers
+            updateMapMarkers();
+            drawMapLegend();
+
+            // 2. Redraw Precipitation Bar Chart
+            updatePrecipitationSubtitle();
+            drawPrecipitationChart();
+
+            // 3. Redraw Sunrise/Sunset Range Chart
+            drawSunrangeChart();
+        }
+
+        /* =========================================================================
+           MAP MARKERS UPDATE
+           ========================================================================= */
+        function updateMapMarkers() {
+            if (!map || !geojsonLayer) return;
+
+            // Filter data for Map (Selected Month & Year)
+            let mapData = allData;
+            if (currentYear !== "all") {
+                const yNum = parseInt(currentYear);
+                mapData = mapData.filter(d => d.year === yNum);
+            }
+
+            // Group by location to compute average stats
+            const locRollup = d3.rollup(mapData,
+                v => {
+                    return {
+                        avgTemp: d3.mean(v, d => d['day.avgtemp_c']),
+                        // avgTemp: d3.mean(v, d => d['day.avgtemp_c']),
+                        totalPrecip: d3.mean(d3.rollup(v, s => d3.sum(s, x => x['day.totalprecip_mm']), d => `${d.year}-${d.month}`).values()), // Average monthly total
+                        lat: v[0]['location.lat'],
+                        lon: v[0]['location.lon'],
+                        sunrise_avg: d3.mean(v.filter(x => x.sunrise_hours !== null), x => x.sunrise_hours),
+                        sunset_avg: d3.mean(v.filter(x => x.sunset_hours !== null), x => x.sunset_hours)
+                    };
+                },
+                d => d['location.name']
+            );
+
+            // Re-populate locStats Map
+            locStats.clear();
+            locRollup.forEach((val, name) => {
+                locStats.set(normalizeName(name), {
+                    originalName: name,
+                    ...val
+                });
+            });
+
+            // Update color scale domain dynamically based on current data range
+            const temps = Array.from(locStats.values()).map(d => d.avgTemp).filter(t => !isNaN(t) && t !== null);
+            if (temps.length > 0) {
+                const minTemp = d3.min(temps);
+                const maxTemp = d3.max(temps);
+                tempColorScale.domain([minTemp, maxTemp]);
+            }
+
+            // Update style of all features dynamically based on new temperature stats
+            geojsonLayer.setStyle(styleFeature);
+        }
+
+        /* =========================================================================
+           PRECIPITATION CHART
+           ========================================================================= */
+        function drawPrecipitationChart() {
+            const containerId = "chart-precipitation";
+            const legendId = "legend-precipitation";
+            const dim = getChartDimensions(containerId, 220);
+
+            d3.select(`#${containerId}`).selectAll("*").remove();
+            d3.select(`#${legendId}`).selectAll("*").remove();
+
+            if (allData.length === 0) return;
+
+            const width = dim.width - dim.margin.left - dim.margin.right;
+            const height = dim.height - dim.margin.top - dim.margin.bottom;
+
+            const svg = d3.select(`#${containerId}`)
+                .append("svg")
+                .attr("width", dim.width)
+                .attr("height", dim.height)
+                .append("g")
+                .attr("transform", `translate(${dim.margin.left}, ${dim.margin.top})`);
+
+            // Define Gradients in SVG
+            const defs = svg.append("defs");
+
+            // Setup vertical gradient for vertical bars
+            const vertBarGrad = defs.append("linearGradient")
+                .attr("id", "precip-vert-bar-grad")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            vertBarGrad.append("stop").attr("offset", "0%").attr("stop-color", "#60a5fa").attr("stop-opacity", 0.9);
+            vertBarGrad.append("stop").attr("offset", "100%").attr("stop-color", "#3b82f6").attr("stop-opacity", 0.4);
+
+            // Scales
+            const x = d3.scaleBand()
+                .domain(monthNames)
+                .range([0, width])
+                .padding(0.3);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(monthlyStatsData, d => d.avgPrecip) * 1.15 || 50])
+                .nice()
+                .range([height, 0]);
+
+            // Grid lines (horizontal)
+            svg.append("g")
+                .attr("class", "grid-line")
+                .call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(""));
+
+            // Axes
+            const xAxis = d3.axisBottom(x);
+            const yAxis = d3.axisLeft(y).ticks(5).tickFormat(d => `${d} mm`);
+
+            svg.append("g")
+                .attr("class", "axis x-axis")
+                .attr("transform", `translate(0, ${height})`)
+                .call(xAxis);
+
+            svg.append("g")
+                .attr("class", "axis y-axis")
+                .call(yAxis);
+
+            // Draw vertical bars
+            svg.selectAll(".precip-bar")
+                .data(monthlyStatsData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar precip-bar")
+                .attr("x", d => x(d.monthName))
+                .attr("y", height)
+                .attr("width", x.bandwidth())
+                .attr("height", 0)
+                .attr("fill", "url(#precip-vert-bar-grad)")
+                .attr("rx", 3)
+                .on("mouseover", function (event, d) {
+                    window.highlightMonth(d.month, event, "precip");
+                })
+                .on("mousemove", function (event, d) {
+                    window.highlightMonth(d.month, event, "precip");
+                })
+                .on("mouseout", function () {
+                    window.highlightMonth(null);
+                })
+                .transition()
+                .duration(800)
+                .attr("y", d => y(d.avgPrecip))
+                .attr("height", d => height - y(d.avgPrecip));
+
+            // Add threshold line for heavy rain (e.g., 150mm)
+            const heavyRainThreshold = 150;
+            if (y.domain()[1] > heavyRainThreshold) {
+                svg.append("line")
+                    .attr("x1", 0)
+                    .attr("x2", width)
+                    .attr("y1", y(heavyRainThreshold))
+                    .attr("y2", y(heavyRainThreshold))
+                    .attr("stroke", "var(--danger-color)")
+                    .attr("stroke-width", 1.5)
+                    .attr("stroke-dasharray", "4,4");
+
+                svg.append("text")
+                    .attr("x", width)
+                    .attr("y", y(heavyRainThreshold) - 5)
+                    .attr("text-anchor", "end")
+                    .attr("fill", "var(--danger-color)")
+                    .style("font-size", "10px")
+                    .style("font-weight", "500")
+                    .text(`Ngưỡng mưa lớn (${heavyRainThreshold}mm)`);
+            }
+
+            // Legend
+            d3.select(`#${legendId}`).append("div").html(`
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(180deg, #60a5fa, #3b82f6);"></div>
+                    <span>Lượng mưa trung bình tháng (mm)</span>
+                </div>
+            `);
+        }
+
+        /* =========================================================================
+           SUNRISE / SUNSET RANGE AREA CHART
+           ========================================================================= */
+        function drawSunrangeChart() {
+            const containerId = "chart-sunrange";
+            const legendId = "legend-sunrange";
+            const dim = getChartDimensions(containerId, 220);
+
+            d3.select(`#${containerId}`).selectAll("*").remove();
+            d3.select(`#${legendId}`).selectAll("*").remove();
+
+            if (allData.length === 0) return;
+
+            const width = dim.width - dim.margin.left - dim.margin.right;
+            const height = dim.height - dim.margin.top - dim.margin.bottom;
+
+            const svg = d3.select(`#${containerId}`)
+                .append("svg")
+                .attr("width", dim.width)
+                .attr("height", dim.height)
+                .append("g")
+                .attr("transform", `translate(${dim.margin.left}, ${dim.margin.top})`);
+
+            // Scales
+            const x = d3.scalePoint()
+                .domain(monthNames)
+                .range([0, width]);
+
+            // Sunrise ranges: ~05:00 - 06:30, Sunset ranges: ~17:00 - 19:00.
+            // We set Y axis from 4.0 AM (4h) to 20.0 PM (20h).
+            const y = d3.scaleLinear()
+                .domain([4, 20])
+                .range([height, 0]);
+
+            // Store scales globally for synchronization
+            window.sunrangeXScale = x;
+            window.sunrangeYScale = y;
+
+            // Grid lines (horizontal)
+            svg.append("g")
+                .attr("class", "grid-line")
+                .call(d3.axisLeft(y).ticks(8).tickSize(-width).tickFormat(""));
+
+            // Axes
+            const xAxis = d3.axisBottom(x);
+            const yAxis = d3.axisLeft(y)
+                .ticks(8)
+                .tickFormat(h => {
+                    const hr = Math.floor(h);
+                    const period = hr >= 12 ? "PM" : "AM";
+                    const hr12 = hr % 12 === 0 ? 12 : hr % 12;
+                    return `${hr12.toString().padStart(2, '0')}:00 ${period}`;
+                });
+
+            svg.append("g")
+                .attr("class", "axis x-axis")
+                .attr("transform", `translate(0, ${height})`)
+                .call(xAxis);
+
+            svg.append("g")
+                .attr("class", "axis y-axis")
+                .call(yAxis);
+
+            // Gradients setup
+            const defs = svg.append("defs");
+            const skyGrad = defs.append("linearGradient")
+                .attr("id", "sky-gradient")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            // Sunset color at the top (Sunset has a smaller y coordinate in SVG coordinate system)
+            skyGrad.append("stop").attr("offset", "0%").attr("stop-color", "#ec4899").attr("stop-opacity", 0.45); // Pink
+            skyGrad.append("stop").attr("offset", "50%").attr("stop-color", "#fb923c").attr("stop-opacity", 0.3); // Orange
+            skyGrad.append("stop").attr("offset", "100%").attr("stop-color", "#fbbf24").attr("stop-opacity", 0.45); // Warm Amber/Yellow
+
+            // Draw Range Area (Daylight Hours)
+            const area = d3.area()
+                .defined(d => d.hasData && d.avgSunrise !== null && d.avgSunset !== null)
+                .x(d => x(d.monthName))
+                .y0(d => y(d.avgSunrise))
+                .y1(d => y(d.avgSunset))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(monthlyStatsData)
+                .attr("fill", "url(#sky-gradient)")
+                .attr("d", area)
+                .attr("opacity", 0)
+                .transition()
+                .duration(800)
+                .attr("opacity", 1);
+
+            // Draw Sunset Line (Upper bound)
+            const sunsetLine = d3.line()
+                .defined(d => d.hasData && d.avgSunset !== null)
+                .x(d => x(d.monthName))
+                .y(d => y(d.avgSunset))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(monthlyStatsData)
+                .attr("fill", "none")
+                .attr("stroke", "var(--sunset-color)")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "3,3")
+                .attr("d", sunsetLine);
+
+            // Draw Sunrise Line (Lower bound)
+            const sunriseLine = d3.line()
+                .defined(d => d.hasData && d.avgSunrise !== null)
+                .x(d => x(d.monthName))
+                .y(d => y(d.avgSunrise))
+                .curve(d3.curveMonotoneX);
+
+            svg.append("path")
+                .datum(monthlyStatsData)
+                .attr("fill", "none")
+                .attr("stroke", "var(--warning-color)")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "3,3")
+                .attr("d", sunriseLine);
+
+            // Hover Tracking Elements
+            const trackLine = svg.append("line")
+                .attr("id", "sunrange-track-line")
+                .attr("class", "track-line")
+                .attr("y1", 0)
+                .attr("y2", height)
+                .attr("stroke", "rgba(255,255,255,0.15)")
+                .attr("stroke-width", 1)
+                .style("stroke-dasharray", "3,3")
+                .style("display", "none");
+
+            const sunriseDot = svg.append("circle")
+                .attr("id", "sunrange-sunrise-dot")
+                .attr("r", 5)
+                .attr("fill", "var(--warning-color)")
+                .attr("stroke", "#151c2c")
+                .attr("stroke-width", 1.5)
+                .style("display", "none");
+
+            const sunsetDot = svg.append("circle")
+                .attr("id", "sunrange-sunset-dot")
+                .attr("r", 5)
+                .attr("fill", "var(--sunset-color)")
+                .attr("stroke", "#151c2c")
+                .attr("stroke-width", 1.5)
+                .style("display", "none");
+
+            // Invisible overlay for tracking mouse
+            svg.append("rect")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("fill", "transparent")
+                .style("cursor", "crosshair")
+                .on("mousemove", function (event) {
+                    const mouseX = d3.pointer(event)[0];
+                    let closestD = null;
+                    let minDist = Infinity;
+
+                    monthlyStatsData.filter(d => d.hasData).forEach(d => {
+                        const xPos = x(d.monthName);
+                        const dist = Math.abs(mouseX - xPos);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestD = d;
+                        }
+                    });
+
+                    if (closestD && minDist < 35) {
+                        window.highlightMonth(closestD.month, event, "sunrange");
+                    } else {
+                        window.highlightMonth(null);
+                    }
+                })
+                .on("mouseout", function () {
+                    window.highlightMonth(null);
+                });
+
+            // Legends
+            const legendDiv = d3.select(`#${legendId}`);
+            legendDiv.append("div").html(`
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(180deg, #ec4899, #fb923c, #fbbf24);"></div>
+                    <span>Ban ngày / Thời gian chiếu sáng</span>
+                </div>
+                <div class="legend-item" style="margin-left: 20px;">
+                    <div class="legend-color" style="background-color: var(--warning-color); height: 2px; border-radius: 0; align-self: center;"></div>
+                    <span>Giờ mọc (Bình minh)</span>
+                </div>
+                <div class="legend-item" style="margin-left: 20px;">
+                    <div class="legend-color" style="background-color: var(--sunset-color); height: 2px; border-radius: 0; align-self: center;"></div>
+                    <span>Giờ lặn (Hoàng hôn)</span>
+                </div>
+            `);
+        }
+    </script>
+</body>
+
+</html>
