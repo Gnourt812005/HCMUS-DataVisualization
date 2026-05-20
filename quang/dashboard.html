@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Khí tượng Nông nghiệp Việt Nam</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1, h3 { text-align: center; color: #2c3e50; margin: 5px 0; }
+        h3 { color: #7f8c8d; font-weight: normal; margin-bottom: 20px; }
+        
+        .filter-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .filter-group label {
+            font-weight: bold;
+            color: #34495e;
+            font-size: 14px;
+        }
+        .filter-container select, .filter-container input {
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+            outline: none;
+            cursor: pointer;
+        }
+        .filter-container select { min-width: 180px; }
+        .filter-container input { width: 140px; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .full-width-chart { grid-column: span 2; }
+        .chart-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .chart-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #34495e;
+            margin-bottom: 5px;
+            border-left: 4px solid #3498db;
+            padding-left: 10px;
+        }
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 10;
+        }
+        .legend { font-size: 12px; cursor: pointer; }
+        .static-legend { font-size: 12px; }
+        .axis-title { font-size: 11px; fill: #555; font-weight: 500; }
+        .loading { text-align: center; font-size: 18px; color: #3498db; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+    <h1>Dashboard Phân tích Khí tượng Nông nghiệp</h1>
+
+    <div class="filter-container" id="filter-wrapper" style="display: none;">
+        <div class="filter-group">
+            <label for="region-select">Khu Vực:</label>
+            <select id="region-select"></select>
+        </div>
+        <div class="filter-group">
+            <label for="province-select">Tỉnh/Thành phố:</label>
+            <select id="province-select"></select>
+        </div>
+        <div class="filter-group">
+            <label for="start-date">Từ ngày:</label>
+            <input type="date" id="start-date">
+        </div>
+        <div class="filter-group">
+            <label for="end-date">Đến ngày:</label>
+            <input type="date" id="end-date">
+        </div>
+    </div>
+
+    <div id="loading-text" class="loading">Đang tải và xử lý dữ liệu CSV...</div>
+
+    <div class="dashboard-grid" id="dashboard" style="display: none;">
+        <div class="chart-container full-width-chart">
+            <div class="chart-title" id="title-1">Chart 1: Tương quan Độ dài Ban ngày & Bức xạ UV</div>
+            <div id="chart1"></div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title" id="title-2">Chart 2: Tiểu khí hậu theo Địa hình</div>
+            <div id="chart2"></div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title" id="title-3">Chart 3: Nguy cơ Rủi ro Kép Mưa & Gió Giật</div>
+            <div id="chart3"></div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip" style="opacity: 0;"></div>
+
+    <script>
+        function safeTimeToHours(timeStr) {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (!parts) return null;
+            let hours = parseInt(parts[1]);
+            const minutes = parseInt(parts[2]);
+            const ampm = parts[3].toUpperCase();
+            if (ampm === "PM" && hours < 12) hours += 12;
+            if (ampm === "AM" && hours === 12) hours = 0;
+            return hours + (minutes / 60);
+        }
+
+        // Tăng margin left/right/bottom một chút để không bị đè nhãn của trục
+        const margin = {top: 40, right: 65, bottom: 60, left: 65};
+        const width = 550 - margin.left - margin.right;
+        const widthFull = 1200 - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+        const tooltip = d3.select("#tooltip");
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+        const formatDateIso = d3.timeFormat("%Y-%m-%d");
+        const formatTimePeriod = d3.timeFormat("%Y-%m");
+
+        let globalCleanedData = [];
+        let globalColorScale; 
+
+        d3.csv("../dataset/dataset.csv").then(function(rawData) {
+            rawData.forEach(d => {
+                if (!d.date) return;
+                const dateObj = parseDate(d.date);
+                if (!dateObj) return;
+                const sunrise = safeTimeToHours(d["astro.sunrise"]);
+                const sunset = safeTimeToHours(d["astro.sunset"]);
+                if (sunrise === null || sunset === null) return;
+                globalCleanedData.push({
+                    dateObj: dateObj,
+                    rawDateStr: d.date,
+                    timePeriod: formatTimePeriod(dateObj),
+                    region: d["location.region"] ? d["location.region"].trim() : "Chưa xác định",
+                    province: d["location.name"] ? d["location.name"].trim() : "Chưa xác định",
+                    terrain: d["location.terrain"] ? d["location.terrain"].trim() : "Chưa phân loại",
+                    uv: +d["day.uv"] || 0,
+                    tempDiff: (+d["day.maxtemp_c"] || 0) - (+d["day.mintemp_c"] || 0),
+                    humidity: +d["day.avghumidity"] || 0,
+                    precip: +d["day.totalprecip_mm"] || 0,
+                    wind: +d["day.maxwind_kph"] || 0,
+                    daylight: sunset - sunrise
+                });
+            });
+
+            const allUniqueTerrains = Array.from(new Set(globalCleanedData.map(d => d.terrain))).sort();
+            globalColorScale = d3.scaleOrdinal().domain(allUniqueTerrains).range(d3.schemeCategory10);
+
+            const allDates = globalCleanedData.map(d => d.dateObj).sort(d3.ascending);
+            const minDatasetDate = allDates[0];
+            const maxDatasetDate = allDates[allDates.length - 1];
+
+            d3.select("#start-date").property("value", formatDateIso(minDatasetDate));
+            d3.select("#end-date").property("value", formatDateIso(maxDatasetDate));
+
+            const uniqueRegions = Array.from(new Set(globalCleanedData.map(d => d.region))).filter(r => r).sort();
+            const selectDropdown = d3.select("#region-select");
+            uniqueRegions.forEach(region => {
+                selectDropdown.append("option").attr("value", region).text(region);
+            });
+
+            const defaultRegion = uniqueRegions.includes("Đông Nam Bộ") ? "Đông Nam Bộ" : uniqueRegions[0];
+            selectDropdown.property("value", defaultRegion);
+
+            // Populate province dropdown
+            const updateProvinceOptions = (selectedRegion) => {
+                const uniqueProvinces = Array.from(new Set(globalCleanedData.filter(d => d.region === selectedRegion).map(d => d.province))).filter(p => p).sort();
+                const provinceDropdown = d3.select("#province-select");
+                provinceDropdown.html("");
+                provinceDropdown.append("option").attr("value", "").text("Tất cả");
+                uniqueProvinces.forEach(province => {
+                    provinceDropdown.append("option").attr("value", province).text(province);
+                });
+                provinceDropdown.property("value", "");
+            };
+
+            updateProvinceOptions(defaultRegion);
+
+            d3.select("#loading-text").style("display", "none");
+            d3.select("#filter-wrapper").style("display", "flex");
+            d3.select("#dashboard").style("display", "grid");
+
+            const triggerUpdate = () => {
+                const r = d3.select("#region-select").property("value");
+                const p = d3.select("#province-select").property("value");
+                const start = d3.select("#start-date").property("value");
+                const end = d3.select("#end-date").property("value");
+                updateDashboard(r, p, start, end);
+            };
+
+            selectDropdown.on("change", () => {
+                const selectedRegion = d3.select("#region-select").property("value");
+                updateProvinceOptions(selectedRegion);
+                triggerUpdate();
+            });
+            d3.select("#province-select").on("change", triggerUpdate);
+            d3.select("#start-date").on("change", triggerUpdate);
+            d3.select("#end-date").on("change", triggerUpdate);
+
+            updateDashboard(defaultRegion, "", formatDateIso(minDatasetDate), formatDateIso(maxDatasetDate));
+        });
+
+        function updateDashboard(selectedRegion, selectedProvince, startDateStr, endDateStr) {
+            d3.select("#chart1").html("");
+            d3.select("#chart2").html("");
+            d3.select("#chart3").html("");
+
+            const filteredData = globalCleanedData.filter(d => {
+                const matchRegion = d.region === selectedRegion;
+                const matchProvince = selectedProvince === "" ? true : d.province === selectedProvince;
+                const matchStart = startDateStr ? d.rawDateStr >= startDateStr : true;
+                const matchEnd = endDateStr ? d.rawDateStr <= endDateStr : true;
+                return matchRegion && matchProvince && matchStart && matchEnd;
+            });
+
+            if (filteredData.length === 0) {
+                d3.select("#chart1").html("<p style='text-align:center;color:#e74c3c;padding-top:40px;'>Không tìm thấy dữ liệu phù hợp trong khoảng thời gian này.</p>");
+                return;
+            }
+
+            const titleLocation = selectedProvince === "" ? `Vùng ${selectedRegion}` : selectedProvince;
+            d3.select("#title-1").text(`Chart 1: Độ dài ban ngày & Bức xạ UV - ${titleLocation}`);
+            d3.select("#title-2").text(`Chart 2: Tiểu khí hậu theo Địa hình - ${titleLocation}`);
+            d3.select("#title-3").text(`Chart 3: Lượng mưa trung bình - ${titleLocation}`);
+
+            const monthlyRollup = d3.rollups(filteredData,
+                v => ({
+                    daylight: d3.mean(v, d => d.daylight) || 12,
+                    uv: d3.mean(v, d => d.uv) || 0,
+                    precip: d3.mean(v, d => d.precip) || 0,
+                    wind: d3.mean(v, d => d.wind) || 0,
+                    minDateObj: d3.min(v, d => d.dateObj)
+                }),
+                d => d.timePeriod
+            ).sort((a, b) => a[1].minDateObj - b[1].minDateObj);
+
+            const timelineData = monthlyRollup.map(m => ({ period: m[0], ...m[1] }));
+            const timeDomain = timelineData.map(d => d.period);
+
+            // ==========================================
+            // CHART 1 (Dual Axis) - LABELS ĐẦY ĐỦ
+            // ==========================================
+            const svg1 = d3.select("#chart1").append("svg").attr("width", widthFull + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            const x1 = d3.scaleBand().domain(timeDomain).range([0, widthFull]).padding(0.3);
+            const y1L = d3.scaleLinear().domain([d3.min(timelineData, d => d.daylight) - 0.2, d3.max(timelineData, d => d.daylight) + 0.2]).range([height, 0]);
+            const y1R = d3.scaleLinear().domain([0, d3.max(timelineData, d => d.uv) + 1]).range([height, 0]);
+
+            svg1.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x1)).selectAll("text").style("text-anchor", "end").attr("dx", "-.8em").attr("dy", ".15em").attr("transform", "rotate(-45)");
+            svg1.append("g").call(d3.axisLeft(y1L));
+            svg1.append("g").attr("transform", `translate(${widthFull},0)`).call(d3.axisRight(y1R));
+
+            // Thêm Label cho các trục Chart 1
+            svg1.append("text").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Độ dài ban ngày (Giờ)");
+            svg1.append("text").attr("transform", "rotate(-90)").attr("y", widthFull + 45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Chỉ số Bức xạ UV");
+
+            // Chú thích (Legend)
+            const legend1 = svg1.append("g").attr("class", "static-legend").attr("transform", `translate(${widthFull / 2 - 150}, -20)`);
+            legend1.append("rect").attr("width", 15).attr("height", 10).attr("fill", "#f39c12").attr("opacity", 0.6);
+            legend1.append("text").attr("x", 22).attr("y", 10).text("Chỉ số UV (Cột)");
+            legend1.append("line").attr("x1", 150).attr("x2", 170).attr("y1", 5).attr("y2", 5).attr("stroke", "#2ecc71").attr("stroke-width", 3);
+            legend1.append("circle").attr("cx", 160).attr("cy", 5).attr("r", 3.5).attr("fill", "#27ae60");
+            legend1.append("text").attr("x", 178).attr("y", 10).text("Độ dài ban ngày (Đường)");
+
+            // Vẽ Bars
+            svg1.selectAll(".bar-uv").data(timelineData).enter().append("rect")
+                .attr("x", d => x1(d.period)).attr("width", x1.bandwidth())
+                .attr("fill", "#f39c12").attr("opacity", 0.5)
+                .attr("y", height).attr("height", 0)
+                .transition().duration(1000).delay((d, i) => i * 50)
+                .attr("y", d => y1R(d.uv)).attr("height", d => height - y1R(d.uv));
+
+            // Vẽ Line
+            const lineGenerator = d3.line().x(d => x1(d.period) + x1.bandwidth() / 2).y(d => y1L(d.daylight));
+            const path1 = svg1.append("path").datum(timelineData).attr("fill", "none").attr("stroke", "#2ecc71").attr("stroke-width", 3).attr("d", lineGenerator);
+            const totalLength = path1.node().getTotalLength();
+            path1.attr("stroke-dasharray", totalLength + " " + totalLength).attr("stroke-dashoffset", totalLength)
+                .transition().duration(2000).attr("stroke-dashoffset", 0);
+
+            // Vẽ Dots
+            svg1.selectAll(".dot-dl").data(timelineData).enter().append("circle")
+                .attr("cx", d => x1(d.period) + x1.bandwidth() / 2).attr("cy", d => y1L(d.daylight))
+                .attr("fill", "#27ae60").attr("r", 0)
+                .transition().duration(400).delay(1800).attr("r", 4.5);
+
+            // Tooltips
+            svg1.selectAll("rect").on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>UV Trung bình: ${d.uv.toFixed(1)}`))
+                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+            svg1.selectAll("circle").on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Độ dài ban ngày: ${d.daylight.toFixed(2)} giờ`))
+                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+
+
+            // ==========================================
+            // CHART 2 (Scatter) - LABELS ĐẦY ĐỦ
+            // ==========================================
+            const svg2 = d3.select("#chart2").append("svg").attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const x2 = d3.scaleLinear().domain([0, d3.max(filteredData, d => d.tempDiff) + 1]).range([0, width]);
+            const y2 = d3.scaleLinear().domain([d3.min(filteredData, d => d.humidity) - 5, 100]).range([height, 0]);
+            
+            svg2.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x2));
+            svg2.append("g").call(d3.axisLeft(y2));
+
+            // Thêm Label cho các trục Chart 2
+            svg2.append("text").attr("x", width / 2).attr("y", height + 40).attr("text-anchor", "middle").attr("class", "axis-title").text("Biên độ nhiệt (Max - Min, °C)");
+            svg2.append("text").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Độ ẩm trung bình (%)");
+
+            const dots = svg2.selectAll(".dot2").data(filteredData).enter().append("circle").attr("class", "dot2")
+                .attr("cx", d => x2(d.tempDiff)).attr("cy", d => y2(d.humidity)).attr("r", 3)
+                .attr("fill", d => globalColorScale(d.terrain)).attr("opacity", 0.6)
+                .on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>${d.terrain}</b><br>Ngày: ${d.rawDateStr}<br>Biên độ nhiệt: ${d.tempDiff.toFixed(1)}°C<br>Độ ẩm: ${d.humidity}%`))
+                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+
+            const terrs = Array.from(new Set(filteredData.map(d => d.terrain))).sort();
+            if(terrs.length > 0) {
+                const legend2 = svg2.selectAll(".legend").data(terrs).enter().append("g").attr("class", "legend").attr("transform", (d, i) => `translate(${width - 110}, ${i * 18 - 20})`);
+                legend2.append("circle").attr("r", 5).attr("fill", d => globalColorScale(d));
+                legend2.append("text").attr("x", 12).attr("y", 4).text(d => d);
+                legend2.on("mouseover", (e, t) => { dots.transition().duration(150).attr("opacity", d => d.terrain === t ? 0.9 : 0.05).attr("r", d => d.terrain === t ? 4.5 : 2); });
+                legend2.on("mouseleave", () => { dots.transition().duration(150).attr("opacity", 0.6).attr("r", 3); });
+            }
+
+
+            // ==========================================
+            // CHART 3 (Bar Chart) - Chỉ mưa
+            // ==========================================
+            const svg3 = d3.select("#chart3").append("svg").attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const x30 = d3.scaleBand().domain(timeDomain).range([0, width]).padding(0.3);
+            const y3 = d3.scaleLinear().domain([0, d3.max(timelineData, d => d.precip) * 1.2]).range([height, 0]);
+
+            svg3.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x30)).selectAll("text").style("text-anchor", "end").attr("dx", "-.8em").attr("dy", ".15em").attr("transform", "rotate(-45)");
+            svg3.append("g").call(d3.axisLeft(y3));
+
+            // Thêm Label cho các trục Chart 3
+            svg3.append("text").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Lượng mưa TB (mm)");
+
+            const g3 = svg3.selectAll(".g3").data(timelineData).enter().append("g").attr("transform", d => `translate(${x30(d.period)},0)`);
+            
+            // Bar Mưa
+            g3.append("rect").attr("x", 0).attr("width", x30.bandwidth()).attr("fill", "#3498db")
+                .attr("y", height).attr("height", 0)
+                .transition().duration(1000).delay((d, i) => i * 40)
+                .attr("y", d => y3(d.precip)).attr("height", d => height - y3(d.precip));
+
+            g3.selectAll("rect").on("mouseover", function(e, d) {
+                tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Mưa TB: ${d.precip.toFixed(1)} mm`);
+            }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+        }
+    </script>
+</body>
+</html>
