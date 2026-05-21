@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surveillance dịch tễ: Sốt xuất huyết & Bệnh mùa mưa</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Leaflet.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <link rel='stylesheet' href='styles.css'>
+</head>
+
+<body>
+
+    <!-- Global Loading Screen -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <p style="font-size:14px; font-weight:500;">Đang xử lý dữ liệu dịch tễ học khí hậu...</p>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title">
+            <h1>SỐT XUẤT HUYẾT & BỆNH MÙA MƯA</h1>
+        </div>
+    </header>
+
+    <!-- Error Banner -->
+    <div id="error-banner">
+        <strong>Lỗi nạp cơ sở dữ liệu!</strong> Không thể truy cập file <code>dataset/dataset.csv</code>.
+        <br>Hệ thống yêu cầu chạy dưới môi trường máy chủ cục bộ (local server) để vượt qua giới hạn bảo mật CORS.
+        <br><br>
+        <strong>Khởi chạy nhanh máy chủ:</strong>
+        <br>Mở terminal tại thư mục gốc của dự án và chạy: <code>python -m http.server 8000</code> hoặc <code>npx live-server</code>
+    </div>
+
+    <!-- Filters Ribbon -->
+    <div class="filters-container">
+        <div class="filter-group">
+            <label for="region-select">Khu vực:</label>
+            <select id="region-select">
+                <option value="all">Tất cả các vùng</option>
+                <!-- Điền động -->
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="province-select">Tỉnh / Thành phố:</label>
+            <select id="province-select">
+                <option value="all">Tất cả tỉnh thành</option>
+                <!-- Điền động -->
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="period-select">Thời kỳ giám sát:</label>
+            <select id="period-select">
+                <option value="all">Tất cả thời gian</option>
+                <option value="T5/2024">Tháng 5/2024</option>
+                <option value="T6/2024">Tháng 6/2024</option>
+                <option value="T7/2024">Tháng 7/2024</option>
+                <option value="T8/2024">Tháng 8/2024</option>
+                <option value="T9/2024">Tháng 9/2024</option>
+                <option value="T10/2024">Tháng 10/2024</option>
+                <option value="T11/2024">Tháng 11/2024</option>
+                <option value="T12/2024">Tháng 12/2024</option>
+                <option value="T1/2025">Tháng 1/2025</option>
+                <option value="T2/2025">Tháng 2/2025</option>
+                <option value="T3/2025">Tháng 3/2025</option>
+                <option value="T4/2025">Tháng 4/2025</option>
+                <option value="T5/2025">Tháng 5/2025</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- KPI Metric Cards Ribbon -->
+    <div class="kpi-container">
+        <!-- KPI 1: Dengue Risk Index -->
+        <div class="kpi-card kpi-risk">
+            <div class="kpi-icon">🦟</div>
+            <div class="kpi-info">
+                <span class="kpi-title">Nguy cơ sốt xuất huyết</span>
+                <span class="kpi-value" id="kpi-risk-value">0.0%</span>
+                <span class="kpi-badge" id="kpi-risk-status">-</span>
+            </div>
+        </div>
+        
+        <!-- KPI 2: Stagnant Water / Total Rain -->
+        <div class="kpi-card kpi-rain">
+            <div class="kpi-icon">💧</div>
+            <div class="kpi-info">
+                <span class="kpi-title">Tổng lượng mưa</span>
+                <span class="kpi-value" id="kpi-rain-value">0 mm</span>
+                <span class="kpi-badge badge-blue" id="kpi-rain-badge" style="background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3)">Tích lũy chu kỳ</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <!-- Row 1: Leaflet Map & Rainfall Heatmap -->
+    <div class="dashboard-grid grid-top">
+        
+        <!-- Map Card -->
+        <div class="card" style="min-height: 570px;">
+            <div class="card-header-chart">
+                <div>
+                    <h3 class="card-title-chart">Bản đồ Sốt Xuất Huyết Việt Nam</h3>
+                    <div class="card-subtitle-chart">Trực quan hóa chỉ số rủi ro sinh thái sốt xuất huyết theo tỉnh thành</div>
+                </div>
+            </div>
+            
+            <div id="map"></div>
+            
+            <div class="map-legend-panel">
+                <div class="map-legend-title" id="map-legend-title-text">Chỉ số Nguy cơ Sốt xuất huyết TB (%)</div>
+                <div class="map-legend-bar-container">
+                    <span id="map-legend-min">0%</span>
+                    <div class="map-legend-bar" id="map-legend-colorbar" style="background: linear-gradient(to right, #fee5d9, #fcae91, #fb6a4a, #de2d26, #a50f15);"></div>
+                    <span id="map-legend-max">100%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task 1: Heatmap Card -->
+        <div class="card" style="min-height: 570px;">
+            <div class="card-header-chart">
+                <div>
+                    <h3 class="card-title-chart" id="heatmap-title">Xác định thời kỳ & khu vực mưa nhiều</h3>
+                    <div class="card-subtitle-chart">Lượng mưa tích lũy trung bình tháng (mm) theo phân vùng</div>
+                </div>
+            </div>
+            
+            <div class="chart-svg-container" id="heatmap-container">
+                <!-- D3 Heatmap -->
+            </div>
+            
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <span>Mưa ít (0mm)</span>
+                    <div style="width: 50px; height: 10px; background: linear-gradient(to right, #e0f2fe, #7dd3fc, #0284c7, #075985);"></div>
+                    <span>Mưa rất to (500mm+)</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Row 2: Scatter Plot & Combo Chart -->
+    <div class="dashboard-grid grid-bottom">
+
+        <!-- Task 2: Scatter Plot Card -->
+        <div class="card">
+            <div class="card-header-chart">
+                <div>
+                    <h3 class="card-title-chart" id="scatter-title">Đánh giá nguy cơ sinh thái của muỗi</h3>
+                    <div class="card-subtitle-chart">Tương quan Độ ẩm vs Mưa (Mỗi chấm đại diện cho 1 ngày khí tượng)</div>
+                </div>
+            </div>
+            
+            <div class="chart-svg-container" id="scatter-container">
+                <!-- D3 Scatter Plot -->
+            </div>
+
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <div class="legend-color-box" style="background-color: var(--accent-red)"></div>
+                    <span>Nguy cơ cao (Đỏ)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color-box" style="background-color: var(--accent-orange)"></div>
+                    <span>Nguy cơ trung bình (Cam)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color-box" style="background-color: var(--accent-green)"></div>
+                    <span>Nguy cơ thấp (Xanh)</span>
+                </div>
+                <div class="legend-item" style="margin-left: 10px;">
+                    <div style="width: 12px; height: 12px; border: 1.5px dashed rgba(244, 63, 94, 0.8); background: rgba(244, 63, 94, 0.08); border-radius: 2px;"></div>
+                    <span>Vùng sinh thái muỗi</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task 3: Combo Chart Card -->
+        <div class="card">
+            <div class="card-header-chart">
+                <div>
+                    <h3 class="card-title-chart" id="combo-title">Hỗ trợ ra quyết định ứng phó mưa lớn</h3>
+                    <div class="card-subtitle-chart">Lượng mưa thực tế (Cột) vs Xác suất dự báo mưa (Đường) theo ngày</div>
+                </div>
+                <!-- Small Month Select for Combo Chart -->
+                <div>
+                    <select id="combo-month-select">
+                        <option value="T5/2024">Tháng 5/2024</option>
+                        <option value="T6/2024">Tháng 6/2024</option>
+                        <option value="T7/2024">Tháng 7/2024</option>
+                        <option value="T8/2024">Tháng 8/2024</option>
+                        <option value="T9/2024">Tháng 9/2024</option>
+                        <option value="T10/2024" selected>Tháng 10/2024</option>
+                        <option value="T11/2024">Tháng 11/2024</option>
+                        <option value="T12/2024">Tháng 12/2024</option>
+                        <option value="T1/2025">Tháng 1/2025</option>
+                        <option value="T2/2025">Tháng 2/2025</option>
+                        <option value="T3/2025">Tháng 3/2025</option>
+                        <option value="T4/2025">Tháng 4/2025</option>
+                        <option value="T5/2025">Tháng 5/2025</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="chart-svg-container" id="combo-container">
+                <!-- D3 Combo Chart -->
+            </div>
+
+            <!-- Dynamic Advice Box -->
+            <div class="advice-box" id="advice-box">
+                <span class="advice-box-icon">💡</span>
+                <div class="advice-box-text" id="advice-text">
+                    Di chuyển chuột qua các cột ngày để xem <strong>khuyến cáo y tế dự phòng lâm sàng</strong> và đánh giá độ chính xác của dự báo.
+                </div>
+            </div>
+
+            <div class="chart-legend" style="margin-top: 10px;">
+                <div class="legend-item">
+                    <div class="legend-color-box" style="background: linear-gradient(180deg, #60a5fa, #1d4ed8);"></div>
+                    <span>Lượng mưa thực tế (Trục trái, mm)</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 16px; height: 2.5px; background-color: var(--accent-cyan);"></div>
+                    <span>Xác suất có mưa (Trục phải, %)</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 16px; height: 1.5px; border-top: 1.5px dashed var(--accent-red);"></div>
+                    <span>Ngưỡng mưa to (20mm)</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Global variables
+        let rawDataset = [];
+        let geojsonData = null;
+        let geojsonLayer = null;
+        let map = null;
+        
+        // Continuous months mapping (May 2024 to May 2025)
+        const dashboardMonths = [
+            { label: "T5/2024", year: 2024, month: 4 },
+            { label: "T6/2024", year: 2024, month: 5 },
+            { label: "T7/2024", year: 2024, month: 6 },
+            { label: "T8/2024", year: 2024, month: 7 },
+            { label: "T9/2024", year: 2024, month: 8 },
+            { label: "T10/2024", year: 2024, month: 9 },
+            { label: "T11/2024", year: 2024, month: 10 },
+            { label: "T12/2024", year: 2024, month: 11 },
+            { label: "T1/2025", year: 2025, month: 0 },
+            { label: "T2/2025", year: 2025, month: 1 },
+            { label: "T3/2025", year: 2025, month: 2 },
+            { label: "T4/2025", year: 2025, month: 3 },
+            { label: "T5/2025", year: 2025, month: 4 }
+        ];
+
+        // Active Filter States
+        let activeRegion = "all";
+        let activeProvince = "all";
+        let activePeriod = "all"; // replacing activeYear, matches 'all' or dashboardMonths label (e.g. 'T5/2024')
+        let activeComboMonthLabel = "T10/2024"; // replacing activeComboMonth, defaults to T10/2024
+
+        // Predefined Vietnam regions to cluster data
+        const regionsMapping = {
+            "Đồng Bằng Sông Cửu Long": "Đồng bằng sông Cửu Long",
+            "Đông Nam Bộ": "Đông Nam Bộ",
+            "Tây Nguyên": "Tây Nguyên",
+            "Bắc Trung Bộ và Duyên hải miền Trung": "Duyên hải miền Trung",
+            "Trung du và miền núi Bắc Bộ": "Miền núi phía Bắc",
+            "Đồng Bằng Sông Hồng": "Đồng bằng sông Hồng"
+        };
+        
+        const monthNames = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"];
+        const tooltip = d3.select("#tooltip");
+
+        // Helper to normalize names for mapping with GeoJSON
+        function normalizeName(text) {
+            if (!text) return "";
+            let s = text.toLowerCase();
+            s = s.replace(/đ/g, "d");
+            s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            s = s.replace(/province/g, "")
+                .replace(/city/g, "")
+                .replace(/tp\./g, "")
+                .replace(/thành phố/g, "")
+                .replace(/thanh pho/g, "");
+            s = s.replace(/[^a-z0-9]/g, "");
+            return s;
+        }
+
+        // ==========================================
+        // DENGUE RISK ALGORITHM
+        // ==========================================
+        function calculateDengueRisk(temp, humidity, precip, rainChance) {
+            // 1. Temperature Factor (Optimal range: 25-30°C)
+            let tFactor = 0;
+            if (temp >= 25 && temp <= 30) {
+                tFactor = 1.0;
+            } else if (temp < 25) {
+                tFactor = Math.max(0, 1 - (25 - temp) / 7); // linear decrease down to 18°C
+            } else {
+                tFactor = Math.max(0, 1 - (temp - 30) / 7); // linear decrease up to 37°C
+            }
+
+            // 2. Humidity Factor (Optimal range: >= 70%)
+            let hFactor = 0;
+            if (humidity >= 70) {
+                hFactor = 1.0;
+            } else if (humidity < 50) {
+                hFactor = 0.0;
+            } else {
+                hFactor = (humidity - 50) / 20; // linear scale between 50% and 70%
+            }
+
+            // 3. Rainfall Factor (Combined rainfall volume and rain probability)
+            // Rain creates breeding pools, and high chance indicates weather pattern change.
+            let rainScore = Math.min(1, precip / 5) * 0.6 + (rainChance / 100) * 0.4;
+            
+            // Mosquitoes need baseline humidity and temperature.
+            // Stagnant water from rain boosts breeding (scaling the factor between 0.3 and 1.0)
+            let risk = tFactor * hFactor * (0.3 + 0.7 * rainScore);
+            
+            return Math.max(0, Math.min(100, risk * 100)); // Return percentage [0 - 100%]
+        }
+
+        // Setup custom color scales
+        const dengueColorScale = d3.scaleLinear()
+            .domain([0, 20, 45, 70, 100])
+            .range(["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"]); // Red alert gradient
+
+        const precipColorScale = d3.scaleLinear()
+            .domain([0, 50, 150, 300, 600])
+            .range(["#e0f2fe", "#7dd3fc", "#38bdf8", "#0284c7", "#0369a1"]); // Blue water gradient
+
+
+
+        // ==========================================
+        // DATA INITIALIZATION & LOADING
+        // ==========================================
+        Promise.all([
+            d3.csv("../dataset/dataset.csv"),
+            d3.json("../dataset/vietnam-provinces.geojson")
+        ]).then(([csvData, geojson]) => {
+            geojsonData = geojson;
+
+            // Filter data to only include range: T5/2024 to T5/2025 (2024-05-01 to 2025-05-31)
+            const startDate = d3.timeParse("%Y-%m-%d")("2024-05-01");
+            const endDate = d3.timeParse("%Y-%m-%d")("2025-05-31");
+
+            // Parse and enrich weather data
+            const parsedData = [];
+            csvData.forEach(d => {
+                const dateObj = d3.timeParse("%Y-%m-%d")(d.date);
+                if (dateObj && dateObj >= startDate && dateObj <= endDate) {
+                    d.dateObj = dateObj;
+                    d.year = dateObj.getFullYear();
+                    d.month = dateObj.getMonth(); // 0-11
+                    d.day = dateObj.getDate();
+                    d.periodLabel = `T${d.month + 1}/${d.year}`;
+
+                    d['day.avgtemp_c'] = +d['day.avgtemp_c'] || 0;
+                    d['day.totalprecip_mm'] = +d['day.totalprecip_mm'] || 0;
+                    d['day.avghumidity'] = +d['day.avghumidity'] || 0;
+                    d['day.daily_chance_of_rain'] = +d['day.daily_chance_of_rain'] || 0;
+                    d['location.lat'] = +d['location.lat'] || 0;
+                    d['location.lon'] = +d['location.lon'] || 0;
+
+                    // Precompute Dengue Risk Index
+                    d.dengueRisk = calculateDengueRisk(
+                        d['day.avgtemp_c'], 
+                        d['day.avghumidity'], 
+                        d['day.totalprecip_mm'], 
+                        d['day.daily_chance_of_rain']
+                    );
+                    parsedData.push(d);
+                }
+            });
+
+            rawDataset = parsedData;
+
+            // Remove loader
+            d3.select("#loading")
+                .transition()
+                .duration(500)
+                .style("opacity", 0)
+                .on("end", function() { d3.select(this).style("display", "none"); });
+
+            // Initialize select selectors
+            populateFilterOptions();
+            
+            // Initialize leaflet map
+            initMap();
+
+            // Run initial draw
+            updateDashboard();
+
+            // Setup listeners
+            d3.select("#region-select").on("change", function() {
+                activeRegion = this.value;
+                activeProvince = "all"; // reset province selection when region changes
+                populateProvinceDropdown();
+                updateDashboard();
+            });
+
+            d3.select("#province-select").on("change", function() {
+                activeProvince = this.value;
+                // If a specific province is selected, we can set its region automatically if it was "all"
+                if (activeProvince !== "all") {
+                    const provData = rawDataset.find(x => x['location.name'] === activeProvince);
+                    if (provData && activeRegion === "all") {
+                        activeRegion = provData['location.region'];
+                        d3.select("#region-select").property("value", activeRegion);
+                    }
+                }
+                updateDashboard();
+            });
+
+            d3.select("#period-select").on("change", function() {
+                activePeriod = this.value;
+                updateDashboard(false);
+            });
+
+            d3.select("#combo-month-select").on("change", function() {
+                activeComboMonthLabel = this.value;
+                drawComboChart();
+            });
+
+
+
+            // Handle browser resize
+            let resizeTimer;
+            window.addEventListener("resize", () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    if (map) map.invalidateSize();
+                    drawHeatmap();
+                    drawScatterPlot();
+                    drawComboChart();
+                }, 200);
+            });
+
+        }).catch(err => {
+            console.error("Lỗi khi tải hoặc xử lý tệp dữ liệu:", err);
+            d3.select("#loading").style("display", "none");
+            d3.select("#error-banner").style("display", "block");
+        });
+
+        // Populate dropdown lists
+        function populateFilterOptions() {
+            // Get unique regions
+            const uniqueRegions = Array.from(new Set(rawDataset.map(d => d['location.region'])))
+                .filter(r => r).sort();
+            
+            const regionSelect = d3.select("#region-select");
+            uniqueRegions.forEach(r => {
+                regionSelect.append("option").attr("value", r).text(r);
+            });
+
+            populateProvinceDropdown();
+        }
+
+        function populateProvinceDropdown() {
+            const provinceSelect = d3.select("#province-select");
+            // Clear current list except first option
+            provinceSelect.selectAll("option:not([value='all'])").remove();
+
+            let dataForProvinces = rawDataset;
+            if (activeRegion !== "all") {
+                dataForProvinces = rawDataset.filter(d => d['location.region'] === activeRegion);
+            }
+
+            const uniqueProvinces = Array.from(new Set(dataForProvinces.map(d => d['location.name'])))
+                .filter(p => p).sort();
+
+            uniqueProvinces.forEach(p => {
+                provinceSelect.append("option").attr("value", p).text(p);
+            });
+
+            provinceSelect.property("value", activeProvince);
+        }
+
+        // ==========================================
+        // DYNAMIC DASHBOARD RE-RENDER
+        // ==========================================
+        function zoomToActiveSelection() {
+            if (!map || !geojsonLayer) return;
+
+            if (activeProvince !== "all") {
+                // Zoom to active province
+                const normProvince = normalizeName(activeProvince);
+                let provinceLayer = null;
+                geojsonLayer.eachLayer(layer => {
+                    if (layer.feature && normalizeName(layer.feature.properties.Name) === normProvince) {
+                        provinceLayer = layer;
+                    }
+                });
+                if (provinceLayer && provinceLayer.getBounds) {
+                    map.fitBounds(provinceLayer.getBounds(), {
+                        padding: [50, 50],
+                        maxZoom: 8,
+                        animate: true,
+                        duration: 1.2
+                    });
+                }
+            } else if (activeRegion !== "all") {
+                // Zoom to active region
+                const provincesInRegion = new Set(
+                    rawDataset
+                        .filter(d => d['location.region'] === activeRegion)
+                        .map(d => normalizeName(d['location.name']))
+                );
+
+                let regionBounds = L.latLngBounds();
+                let found = false;
+
+                geojsonLayer.eachLayer(layer => {
+                    if (layer.feature) {
+                        const normName = normalizeName(layer.feature.properties.Name);
+                        if (provincesInRegion.has(normName) && layer.getBounds) {
+                            regionBounds.extend(layer.getBounds());
+                            found = true;
+                        }
+                    }
+                });
+
+                if (found) {
+                    map.fitBounds(regionBounds, {
+                        padding: [40, 40],
+                        animate: true,
+                        duration: 1.2
+                    });
+                }
+            } else {
+                // Zoom to all of Vietnam
+                if (geojsonLayer.getBounds) {
+                    map.fitBounds(geojsonLayer.getBounds(), {
+                        padding: [20, 20],
+                        animate: true,
+                        duration: 1.0
+                    });
+                }
+            }
+        }
+
+        function updateDashboard(shouldZoom = true) {
+            // 1. Calculate KPI Metrics
+            calculateKPIs();
+
+            // 2. Redraw Map overlay and center if needed
+            updateMapColors();
+            highlightSelectedProvinceOnMap();
+            
+            if (shouldZoom) {
+                zoomToActiveSelection();
+            }
+
+            // 3. Draw Heatmap (Task 1)
+            drawHeatmap();
+
+            // 4. Draw Scatter Plot (Task 2)
+            drawScatterPlot();
+
+            // 5. Draw Combo Chart (Task 3)
+            drawComboChart();
+        }
+
+        // Calculate KPI values based on filter selections
+        function calculateKPIs() {
+            let filtered = rawDataset;
+            if (activePeriod !== "all") {
+                filtered = filtered.filter(d => d.periodLabel === activePeriod);
+            }
+            
+            if (activeRegion !== "all") {
+                filtered = filtered.filter(d => d['location.region'] === activeRegion);
+            }
+            if (activeProvince !== "all") {
+                filtered = filtered.filter(d => d['location.name'] === activeProvince);
+            }
+
+            if (filtered.length === 0) {
+                d3.select("#kpi-risk-value").text("0.0%");
+                d3.select("#kpi-risk-status").text("N/A").attr("class", "kpi-badge");
+                d3.select("#kpi-rain-value").text("0 mm");
+                d3.select("#kpi-humidity-value").text("0.0%");
+                d3.select("#kpi-alert-days-value").text("0 ngày");
+                return;
+            }
+
+            // Averages and Accumulations
+            const avgRisk = d3.mean(filtered, d => d.dengueRisk) || 0;
+            const avgHumid = d3.mean(filtered, d => d.day.avghumidity) || 0;
+            
+            // Total Rainfall: Need to sum daily rainfall, but if we're summarizing multiple provinces,
+            // we should represent the average provincial cumulative rain to be medically meaningful.
+            let totalRain = 0;
+            const provGroups = d3.group(filtered, d => d['location.name']);
+            const provRainTotals = Array.from(provGroups.values()).map(days => d3.sum(days, d => d['day.totalprecip_mm']));
+            totalRain = d3.mean(provRainTotals) || 0;
+
+            // Red Alert Days (Risk >= 60%)
+            // If representing multiple provinces, count average alert days per province.
+            const provAlertCounts = Array.from(provGroups.values()).map(days => days.filter(d => d.dengueRisk >= 60).length);
+            const avgAlertDays = d3.mean(provAlertCounts) || 0;
+
+            // UI updates
+            d3.select("#kpi-risk-value").text(`${avgRisk.toFixed(1)}%`);
+            d3.select("#kpi-rain-value").text(`${Math.round(totalRain).toLocaleString()} mm`);
+            d3.select("#kpi-humidity-value").text(`${avgHumid.toFixed(1)}%`);
+            d3.select("#kpi-alert-days-value").text(`${Math.round(avgAlertDays)} ngày`);
+
+            // Update Rain KPI card badge text based on activePeriod
+            const rainBadge = d3.select("#kpi-rain-badge");
+            if (activePeriod === "all") {
+                rainBadge.text("Tích lũy chu kỳ");
+            } else {
+                rainBadge.text("Lũy kế tháng");
+            }
+
+            // Risk status badge
+            let statusText = "Thấp";
+            let statusClass = "badge-green";
+            if (avgRisk >= 45) {
+                statusText = "Nguy cơ rất cao";
+                statusClass = "badge-red";
+            } else if (avgRisk >= 25) {
+                statusText = "Trung bình";
+                statusClass = "badge-orange";
+            }
+            d3.select("#kpi-risk-status").text(statusText).attr("class", `kpi-badge ${statusClass}`);
+
+            // Alert days badge text
+            let alertText = "Mức độ an toàn";
+            let alertClass = "badge-green";
+            if (avgAlertDays > 45) {
+                alertText = "Khẩn cấp y tế";
+                alertClass = "badge-red";
+            } else if (avgAlertDays > 15) {
+                alertText = "Cảnh giác tăng cao";
+                alertClass = "badge-orange";
+            }
+            d3.select("#kpi-alert-badge-text").text(alertText).attr("class", `kpi-badge ${alertClass}`);
+        }
+
+        // ==========================================
+        // MAP FUNCTIONALITY (Leaflet & GeoJSON)
+        // ==========================================
+        function initMap() {
+            let initZoom = window.innerWidth < 768 ? 5 : 5.6;
+            map = L.map('map', {
+                zoomControl: true,
+                scrollWheelZoom: false
+            }).setView([16.0, 106.3], initZoom);
+
+            // Dark-matter basemap
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            if (geojsonData) {
+                geojsonLayer = L.geoJSON(geojsonData, {
+                    style: styleMapFeature,
+                    onEachFeature: onEachFeatureMap
+                }).addTo(map);
+
+                try {
+                    map.fitBounds(geojsonLayer.getBounds());
+                } catch(e) {}
+            }
+        }
+
+        // Calculate map attributes for each province based on the selected period
+        function getProvinceStatsMap() {
+            const mapStats = new Map();
+            let periodData = rawDataset;
+            if (activePeriod !== "all") {
+                periodData = periodData.filter(d => d.periodLabel === activePeriod);
+            }
+
+            const groups = d3.group(periodData, d => d['location.name']);
+            groups.forEach((days, name) => {
+                const avgRisk = d3.mean(days, d => d.dengueRisk);
+                const avgTemp = d3.mean(days, d => d['day.avgtemp_c']);
+                const avgHumid = d3.mean(days, d => d['day.avghumidity']);
+                const totalPrecip = d3.sum(days, d => d['day.totalprecip_mm']);
+                const alertDaysCount = days.filter(d => d.dengueRisk >= 60).length;
+
+                mapStats.set(normalizeName(name), {
+                    originalName: name,
+                    avgRisk,
+                    avgTemp,
+                    avgHumid,
+                    totalPrecip,
+                    alertDaysCount
+                });
+            });
+            return mapStats;
+        }
+
+        // Color and borders of map features
+        function styleMapFeature(feature) {
+            const normGeoName = normalizeName(feature.properties.Name);
+            const stats = getProvinceStatsMap().get(normGeoName);
+            
+            let fillColor = "#151c2c"; // default dark fill
+
+            if (stats) {
+                fillColor = dengueColorScale(stats.avgRisk);
+            }
+
+            const isSelected = stats ? (stats.originalName === activeProvince) : false;
+
+            return {
+                fillColor: fillColor,
+                weight: isSelected ? 2.5 : 0.8,
+                opacity: 1,
+                color: isSelected ? "#ffffff" : "#243049",
+                fillOpacity: isSelected ? 0.9 : 0.75
+            };
+        }
+
+        function updateMapColors() {
+            if (!geojsonLayer) return;
+            
+            // Update GeoJSON Styles
+            geojsonLayer.setStyle(styleMapFeature);
+        }
+
+        function highlightSelectedProvinceOnMap() {
+            if (!geojsonLayer) return;
+            geojsonLayer.setStyle(styleMapFeature);
+        }
+
+        function onEachFeatureMap(feature, layer) {
+            const normGeoName = normalizeName(feature.properties.Name);
+
+            layer.on({
+                mouseover: function(e) {
+                    const stats = getProvinceStatsMap().get(normGeoName);
+                    if (!stats) return;
+
+                    layer.setStyle({
+                        weight: 2,
+                        color: "#ffffff",
+                        fillOpacity: 0.85
+                    });
+
+                    tooltip.style("opacity", 1);
+                    tooltip.html(`
+                        <div class="tooltip-title">${stats.originalName}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nguy cơ Sốt xuất huyết:</span>
+                            <span class="tooltip-val" style="color:var(--accent-red)">${stats.avgRisk.toFixed(1)}%</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nhiệt độ TB:</span>
+                            <span class="tooltip-val" style="color:var(--accent-orange)">${stats.avgTemp.toFixed(1)}°C</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Độ ẩm TB:</span>
+                            <span class="tooltip-val" style="color:var(--accent-green)">${stats.avgHumid.toFixed(1)}%</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Lượng mưa tích lũy:</span>
+                            <span class="tooltip-val" style="color:var(--accent-cyan)">${Math.round(stats.totalPrecip)} mm</span>
+                        </div>
+                        <div class="tooltip-row" style="margin-top: 5px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 5px;">
+                            <span class="tooltip-label">Số ngày báo động đỏ:</span>
+                            <span class="tooltip-val" style="color:#ffffff">${stats.alertDaysCount} ngày</span>
+                        </div>
+                    `);
+                },
+                mousemove: function(e) {
+                    tooltip
+                        .style("left", (e.originalEvent.pageX + 15) + "px")
+                        .style("top", (e.originalEvent.pageY - 15) + "px");
+                },
+                mouseout: function(e) {
+                    const stats = getProvinceStatsMap().get(normGeoName);
+                    if (!stats) return;
+                    
+                    const isSelected = stats.originalName === activeProvince;
+                    layer.setStyle({
+                        weight: isSelected ? 2.5 : 0.8,
+                        color: isSelected ? "#ffffff" : "#243049",
+                        fillOpacity: isSelected ? 0.9 : 0.75
+                    });
+                    tooltip.style("opacity", 0);
+                },
+                click: function(e) {
+                    const stats = getProvinceStatsMap().get(normGeoName);
+                    if (stats) {
+                        selectProvinceGlobally(stats.originalName);
+                    }
+                }
+            });
+        }
+
+        function selectProvinceGlobally(provinceName) {
+            activeProvince = provinceName;
+            d3.select("#province-select").property("value", provinceName);
+            
+            // Sync activeRegion selection automatically
+            const provData = rawDataset.find(x => x['location.name'] === provinceName);
+            if (provData) {
+                activeRegion = provData['location.region'];
+                d3.select("#region-select").property("value", activeRegion);
+                populateProvinceDropdown();
+            }
+
+            updateDashboard();
+        }
+
+        // ==========================================
+        // TASK 1: RAINFALL HEATMAP (D3.js)
+        // ==========================================
+        function drawHeatmap() {
+            const container = d3.select("#heatmap-container");
+            container.html(""); // clear
+
+            const widthContainer = container.node().clientWidth || 500;
+            const margin = { top: 40, right: 20, bottom: 30, left: 130 };
+            const height = 460 - margin.top - margin.bottom;
+            const width = widthContainer - margin.left - margin.right;
+
+            // Generate Heatmap Data over the 13 dashboardMonths
+            let yValues = []; // Rows (Regions or Provinces)
+            let rollupData = [];
+
+            if (activeRegion === "all") {
+                // Y-axis shows Regions
+                yValues = Object.keys(regionsMapping).sort();
+                
+                yValues.forEach(reg => {
+                    const regData = rawDataset.filter(d => d['location.region'] === reg);
+                    const periodGroups = d3.group(regData, d => d.periodLabel);
+                    
+                    dashboardMonths.forEach(m => {
+                        const days = periodGroups.get(m.label) || [];
+                        // Average rainfall of provinces in this region for this month
+                        const provGroups = d3.group(days, d => d['location.name']);
+                        const provTotals = Array.from(provGroups.values()).map(x => d3.sum(x, d => d['day.totalprecip_mm']));
+                        const avgPrecip = d3.mean(provTotals) || 0;
+
+                        rollupData.push({
+                            yLabel: reg,
+                            yDisplayName: regionsMapping[reg] || reg,
+                            periodLabel: m.label,
+                            year: m.year,
+                            month: m.month,
+                            precip: avgPrecip
+                        });
+                    });
+                });
+            } else {
+                // Y-axis shows Provinces in the selected region
+                const regFiltered = rawDataset.filter(d => d['location.region'] === activeRegion);
+                yValues = Array.from(new Set(regFiltered.map(d => d['location.name']))).sort();
+
+                yValues.forEach(prov => {
+                    const provData = regFiltered.filter(d => d['location.name'] === prov);
+                    const periodGroups = d3.group(provData, d => d.periodLabel);
+                    
+                    dashboardMonths.forEach(m => {
+                        const days = periodGroups.get(m.label) || [];
+                        const avgPrecip = d3.sum(days, d => d['day.totalprecip_mm']) || 0;
+
+                        rollupData.push({
+                            yLabel: prov,
+                            yDisplayName: prov,
+                            periodLabel: m.label,
+                            year: m.year,
+                            month: m.month,
+                            precip: avgPrecip
+                        });
+                    });
+                });
+            }
+
+            // Setup chart header title text
+            const titleElement = d3.select("#heatmap-title");
+            if (activeRegion === "all") {
+                titleElement.text("Xác định thời kỳ & khu vực mưa nhiều (Vùng miền)");
+            } else {
+                titleElement.text(`Thời kỳ mưa nhiều tại vùng ${regionsMapping[activeRegion] || activeRegion}`);
+            }
+
+            const svg = container.append("svg")
+                .attr("width", widthContainer)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+            // Scales
+            const x = d3.scaleBand()
+                .domain(dashboardMonths.map(m => m.label))
+                .range([0, width])
+                .padding(0.04);
+
+            const displayNames = rollupData.reduce((acc, curr) => {
+                acc[curr.yLabel] = curr.yDisplayName;
+                return acc;
+            }, {});
+
+            const y = d3.scaleBand()
+                .domain(yValues)
+                .range([0, height])
+                .padding(0.04);
+
+            // Axes
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .style("color", "var(--text-secondary)")
+                .call(d3.axisBottom(x).tickSize(0))
+                .select(".domain").remove();
+
+            // Style X-axis ticks
+            svg.selectAll("g.tick text")
+                .attr("dy", "0.8em")
+                .style("font-size", "10px");
+
+            svg.append("g")
+                .style("color", "var(--text-secondary)")
+                .call(d3.axisLeft(y).tickFormat(d => {
+                    const val = displayNames[d] || d;
+                    return val.length > 18 ? val.substring(0, 16) + "..." : val;
+                }).tickSize(0))
+                .select(".domain").remove();
+
+            // Render Heatmap cells
+            svg.selectAll(".heatmap-cell")
+                .data(rollupData)
+                .enter()
+                .append("rect")
+                .attr("class", "heatmap-cell")
+                .attr("x", d => x(d.periodLabel))
+                .attr("y", d => y(d.yLabel))
+                .attr("width", x.bandwidth())
+                .attr("height", y.bandwidth())
+                .attr("rx", 3)
+                .attr("fill", d => precipColorScale(d.precip))
+                .style("opacity", d => {
+                    // Highlight selected period by fading out others
+                    if (activePeriod === "all" || d.periodLabel === activePeriod) {
+                        return 1.0;
+                    }
+                    return 0.35;
+                })
+                .on("mouseover", function(event, d) {
+                    d3.select(this).style("stroke", "#ffffff").style("stroke-width", "2px");
+                    tooltip.style("opacity", 1);
+                    tooltip.html(`
+                        <div class="tooltip-title">${d.yDisplayName}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Thời kỳ:</span>
+                            <span class="tooltip-val" style="color:var(--accent-cyan)">${d.periodLabel}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Lượng mưa tháng:</span>
+                            <span class="tooltip-val" style="color:#ffffff">${d.precip.toFixed(1)} mm</span>
+                        </div>
+                    `);
+                })
+                .on("mousemove", function(e) {
+                    tooltip
+                        .style("left", (e.pageX + 15) + "px")
+                        .style("top", (e.pageY - 15) + "px");
+                })
+                .on("mouseout", function() {
+                    d3.select(this).style("stroke", "#0d121f").style("stroke-width", "1px");
+                    tooltip.style("opacity", 0);
+                })
+                .on("click", function(event, d) {
+                    // Set period and sync combo chart
+                    activePeriod = d.periodLabel;
+                    activeComboMonthLabel = d.periodLabel;
+                    d3.select("#period-select").property("value", activePeriod);
+                    d3.select("#combo-month-select").property("value", activeComboMonthLabel);
+
+                    if (activeRegion === "all") {
+                        activeRegion = d.yLabel;
+                        d3.select("#region-select").property("value", activeRegion);
+                        populateProvinceDropdown();
+                        updateDashboard();
+                    } else {
+                        selectProvinceGlobally(d.yLabel);
+                    }
+                });
+        }
+
+        // ==========================================
+        // TASK 2: ECOLOGICAL SCATTER PLOT (D3.js)
+        // ==========================================
+        function drawScatterPlot() {
+            const container = d3.select("#scatter-container");
+            container.html(""); // clear
+
+            const widthContainer = container.node().clientWidth || 500;
+            const margin = { top: 20, right: 30, bottom: 45, left: 50 };
+            const height = 300 - margin.top - margin.bottom;
+            const width = widthContainer - margin.left - margin.right;
+
+            // Generate Scatter Data
+            // We plot daily records for the selected province and year.
+            // If no specific province is selected, we choose the first available province or average,
+            // but to be scientifically robust and clear, we plot all daily data points for the SELECTED province.
+            // If "All Provinces" is selected, we default to showing TP. Hồ Chí Minh or another main city to avoid plotting 26,000 points.
+            let provinceToDraw = activeProvince;
+            if (provinceToDraw === "all") {
+                // Find first province in the selected region or default to TP. Hồ Chí Minh
+                let datasetProvinces = rawDataset;
+                if (activeRegion !== "all") {
+                    datasetProvinces = rawDataset.filter(d => d['location.region'] === activeRegion);
+                }
+                const uniqueProvs = Array.from(new Set(datasetProvinces.map(d => d['location.name'])));
+                provinceToDraw = uniqueProvs.includes("TP. Hồ Chí Minh") ? "TP. Hồ Chí Minh" : uniqueProvs[0];
+            }
+
+            const periodText = activePeriod === "all" ? "T5/2024 - T5/2025" : activePeriod;
+            d3.select("#scatter-title").text(`Đánh giá nguy cơ sinh thái muỗi - ${provinceToDraw} (${periodText})`);
+
+            let dailyData = rawDataset.filter(d => d['location.name'] === provinceToDraw);
+            if (activePeriod !== "all") {
+                dailyData = dailyData.filter(d => d.periodLabel === activePeriod);
+            }
+
+            const svg = container.append("svg")
+                .attr("width", widthContainer)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+            // Scales
+            const x = d3.scaleLinear()
+                .domain([30, 100]) // Humidity % range
+                .range([0, width]);
+
+            const maxYVal = d3.max(dailyData, d => d['day.totalprecip_mm']) || 20;
+            const y = d3.scaleLinear()
+                .domain([0, Math.max(40, maxYVal * 1.05)]) // Rainfall mm range
+                .nice()
+                .range([height, 0]);
+
+            // Grid lines (horizontal & vertical)
+            svg.append("g")
+                .attr("class", "grid-line")
+                .call(d3.axisLeft(y).ticks(5).tickSize(-width).tickFormat(""));
+            
+            svg.append("g")
+                .attr("class", "grid-line")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(x).ticks(8).tickSize(-height).tickFormat(""));
+
+            // Danger Zone Rectangle (Humid >= 70% and Precip >= 5mm)
+            // It represents the key eco conditions for mosquitoes
+            const dangerX = x(70);
+            const dangerY = y(y.domain()[1]);
+            const dangerWidth = x(100) - x(70);
+            const dangerHeight = y(5) - y(y.domain()[1]);
+
+            svg.append("rect")
+                .attr("x", dangerX)
+                .attr("y", dangerY)
+                .attr("width", dangerWidth)
+                .attr("height", dangerHeight)
+                .attr("fill", "rgba(244, 63, 94, 0.05)")
+                .attr("stroke", "rgba(244, 63, 94, 0.3)")
+                .attr("stroke-width", 1.5)
+                .style("stroke-dasharray", "4,4")
+                .style("pointer-events", "none");
+
+            // Text tag for Danger Zone
+            svg.append("text")
+                .attr("x", dangerX + 10)
+                .attr("y", dangerY + 18)
+                .attr("fill", "var(--accent-red)")
+                .style("font-size", "10px")
+                .style("font-weight", "600")
+                .text("VÙNG SINH THÁI BÁO ĐỘNG ĐỎ");
+
+            // Axes
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .style("color", "var(--text-secondary)")
+                .call(d3.axisBottom(x).ticks(8).tickFormat(d => `${d}%`));
+
+            svg.append("g")
+                .style("color", "var(--text-secondary)")
+                .call(d3.axisLeft(y).ticks(5).tickFormat(d => `${d} mm`));
+
+            // X-axis label
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height + 36)
+                .attr("text-anchor", "middle")
+                .style("fill", "var(--text-secondary)")
+                .style("font-size", "11px")
+                .style("font-weight", "500")
+                .text("Độ ẩm trung bình ngày (%)");
+
+            // Y-axis label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -height / 2)
+                .attr("y", -38)
+                .attr("text-anchor", "middle")
+                .style("fill", "var(--text-secondary)")
+                .style("font-size", "11px")
+                .style("font-weight", "500")
+                .text("Lượng mưa trong ngày (mm)");
+
+            // Plot Dots
+            svg.selectAll(".scatter-dot")
+                .data(dailyData)
+                .enter()
+                .append("circle")
+                .attr("class", "scatter-dot")
+                .attr("cx", d => x(d['day.avghumidity']))
+                .attr("cy", d => y(d['day.totalprecip_mm']))
+                // Temperature maps to radius: 25-30C is average, radius ranges 3 to 8
+                .attr("r", d => {
+                    const temp = d['day.avgtemp_c'];
+                    return Math.max(3.5, Math.min(8.5, (temp - 15) / 2));
+                })
+                .attr("fill", d => {
+                    const risk = d.dengueRisk;
+                    if (risk >= 60) return "var(--accent-red)";
+                    if (risk >= 30) return "var(--accent-orange)";
+                    return "var(--accent-green)";
+                })
+                .attr("stroke", "#0b0f19")
+                .attr("stroke-width", 0.8)
+                .on("mouseover", function(event, d) {
+                    d3.select(this).attr("stroke", "#ffffff").attr("stroke-width", 1.5).attr("r", parseFloat(d3.select(this).attr("r")) + 2);
+                    
+                    tooltip.style("opacity", 1);
+                    tooltip.html(`
+                        <div class="tooltip-title">Chi tiết ngày ${d3.timeFormat("%d/%m/%Y")(d.dateObj)}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nguy cơ SXH:</span>
+                            <span class="tooltip-val" style="color:${d.dengueRisk >= 60 ? 'var(--accent-red)' : d.dengueRisk >= 30 ? 'var(--accent-orange)' : 'var(--accent-green)'}">${d.dengueRisk.toFixed(1)}%</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Độ ẩm:</span>
+                            <span class="tooltip-val">${d['day.avghumidity']}%</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Lượng mưa:</span>
+                            <span class="tooltip-val">${d['day.totalprecip_mm']} mm</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Nhiệt độ TB:</span>
+                            <span class="tooltip-val">${d['day.avgtemp_c']}°C</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Khả năng mưa:</span>
+                            <span class="tooltip-val">${d['day.daily_chance_of_rain']}%</span>
+                        </div>
+                    `);
+                })
+                .on("mousemove", function(e) {
+                    tooltip
+                        .style("left", (e.pageX + 15) + "px")
+                        .style("top", (e.pageY - 15) + "px");
+                })
+                .on("mouseout", function() {
+                    d3.select(this).attr("stroke", "#0b0f19").attr("stroke-width", 0.8).attr("r", d => {
+                        const temp = d['day.avgtemp_c'];
+                        return Math.max(3.5, Math.min(8.5, (temp - 15) / 2));
+                    });
+                    tooltip.style("opacity", 0);
+                });
+        }
+
+        // ==========================================
+        // TASK 3: RAIN DECISION COMBO CHART (D3.js)
+        // ==========================================
+        function drawComboChart() {
+            const container = d3.select("#combo-container");
+            container.html(""); // clear
+
+            const widthContainer = container.node().clientWidth || 500;
+            const margin = { top: 25, right: 45, bottom: 35, left: 45 };
+            const height = 250 - margin.top - margin.bottom;
+            const width = widthContainer - margin.left - margin.right;
+
+            // Generate daily data for the selected province, year, and month
+            let provinceToDraw = activeProvince;
+            if (provinceToDraw === "all") {
+                let datasetProvinces = rawDataset;
+                if (activeRegion !== "all") {
+                    datasetProvinces = rawDataset.filter(d => d['location.region'] === activeRegion);
+                }
+                const uniqueProvs = Array.from(new Set(datasetProvinces.map(d => d['location.name'])));
+                provinceToDraw = uniqueProvs.includes("TP. Hồ Chí Minh") ? "TP. Hồ Chí Minh" : uniqueProvs[0];
+            }
+
+            d3.select("#combo-title").text(`Mưa thực tế & Xác suất mưa theo ngày tại ${provinceToDraw}`);
+
+            // Filter daily records for this month-year label
+            const dailyData = rawDataset.filter(d => 
+                d['location.name'] === provinceToDraw && 
+                d.periodLabel === activeComboMonthLabel
+            ).sort((a, b) => a.day - b.day);
+
+            if (dailyData.length === 0) {
+                container.html("<div style='color:var(--accent-red); font-size:13px; text-align:center; padding-top:50px;'>Không tìm thấy dữ liệu thời tiết trong khoảng thời gian này.</div>");
+                return;
+            }
+
+            const svg = container.append("svg")
+                .attr("width", widthContainer)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+            // Setup Gradients for Bar
+            const defs = svg.append("defs");
+            const barGrad = defs.append("linearGradient")
+                .attr("id", "combo-bar-grad")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            barGrad.append("stop").attr("offset", "0%").attr("stop-color", "rgba(96, 165, 250, 0.9)");
+            barGrad.append("stop").attr("offset", "100%").attr("stop-color", "rgba(29, 78, 216, 0.3)");
+
+            // Scales
+            const x = d3.scaleBand()
+                .domain(dailyData.map(d => d.day))
+                .range([0, width])
+                .padding(0.2);
+
+            const maxPrecip = d3.max(dailyData, d => d['day.totalprecip_mm']) || 10;
+            const yLeft = d3.scaleLinear()
+                .domain([0, Math.max(30, maxPrecip * 1.15)])
+                .nice()
+                .range([height, 0]);
+
+            const yRight = d3.scaleLinear()
+                .domain([0, 100])
+                .range([height, 0]);
+
+            // Grid lines (horizontal)
+            svg.append("g")
+                .attr("class", "grid-line")
+                .call(d3.axisLeft(yLeft).ticks(5).tickSize(-width).tickFormat(""));
+
+            // Axes
+            const xAxis = d3.axisBottom(x).tickValues(x.domain().filter((d, i) => i % 2 === 0 || i === dailyData.length - 1));
+            const yAxisLeft = d3.axisLeft(yLeft).ticks(5).tickFormat(d => `${d}mm`);
+            const yAxisRight = d3.axisRight(yRight).ticks(5).tickFormat(d => `${d}%`);
+
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .style("color", "var(--text-secondary)")
+                .call(xAxis);
+
+            svg.append("g")
+                .style("color", "var(--text-secondary)")
+                .call(yAxisLeft);
+
+            svg.append("g")
+                .attr("transform", `translate(${width}, 0)`)
+                .style("color", "var(--accent-cyan)")
+                .call(yAxisRight);
+
+            // Heavy Rain Alert threshold (20mm)
+            svg.append("line")
+                .attr("x1", 0)
+                .attr("x2", width)
+                .attr("y1", yLeft(20))
+                .attr("y2", yLeft(20))
+                .attr("stroke", "var(--accent-red)")
+                .attr("stroke-width", 1.2)
+                .attr("stroke-dasharray", "3,3");
+
+            // Draw Bars (Precipitation)
+            svg.selectAll(".combo-bar")
+                .data(dailyData)
+                .enter()
+                .append("rect")
+                .attr("class", "combo-bar")
+                .attr("x", d => x(d.day))
+                .attr("y", height)
+                .attr("width", x.bandwidth())
+                .attr("height", 0)
+                .on("mouseover", function(event, d) {
+                    showComboTooltip(event, d);
+                })
+                .on("mousemove", function(e) {
+                    tooltip
+                        .style("left", (e.pageX + 15) + "px")
+                        .style("top", (e.pageY - 15) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("opacity", 0);
+                })
+                .transition()
+                .duration(800)
+                .attr("y", d => yLeft(d['day.totalprecip_mm']))
+                .attr("height", d => height - yLeft(d['day.totalprecip_mm']));
+
+            // Draw Line (Chance of Rain)
+            const lineGen = d3.line()
+                .x(d => x(d.day) + x.bandwidth() / 2)
+                .y(d => yRight(d['day.daily_chance_of_rain']))
+                .curve(d3.curveMonotoneX);
+
+            const path = svg.append("path")
+                .datum(dailyData)
+                .attr("class", "combo-line")
+                .attr("d", lineGen);
+
+            // Animate path drawing
+            const totalLength = path.node().getTotalLength();
+            path.attr("stroke-dasharray", totalLength + " " + totalLength)
+                .attr("stroke-dashoffset", totalLength)
+                .transition()
+                .duration(1200)
+                .attr("stroke-dashoffset", 0);
+
+            // Draw Dots on Line
+            svg.selectAll(".combo-dot")
+                .data(dailyData)
+                .enter()
+                .append("circle")
+                .attr("class", "combo-dot")
+                .attr("cx", d => x(d.day) + x.bandwidth() / 2)
+                .attr("cy", d => yRight(d['day.daily_chance_of_rain']))
+                .attr("r", 0)
+                .on("mouseover", function(event, d) {
+                    showComboTooltip(event, d);
+                })
+                .on("mousemove", function(e) {
+                    tooltip
+                        .style("left", (e.pageX + 15) + "px")
+                        .style("top", (e.pageY - 15) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("opacity", 0);
+                })
+                .transition()
+                .duration(400)
+                .delay(1000)
+                .attr("r", 3.5);
+        }
+
+        // Show detailed tooltip and clinical advice text
+        function showComboTooltip(event, d) {
+            tooltip.style("opacity", 1);
+            tooltip.html(`
+                <div class="tooltip-title">Ngày ${d.day} (${d.periodLabel})</div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Lượng mưa thực tế:</span>
+                    <span class="tooltip-val" style="color:var(--accent-blue)">${d['day.totalprecip_mm'].toFixed(1)} mm</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Xác suất báo mưa:</span>
+                    <span class="tooltip-val" style="color:var(--accent-cyan)">${d['day.daily_chance_of_rain']}%</span>
+                </div>
+                <div class="tooltip-row">
+                    <span class="tooltip-label">Độ ẩm TB:</span>
+                    <span class="tooltip-val">${d['day.avghumidity']}%</span>
+                </div>
+            `);
+
+            // Clinical advice analysis logic
+            const rain = d['day.totalprecip_mm'];
+            const chance = d['day.daily_chance_of_rain'];
+            let adviceStr = "";
+
+            if (chance > 80 && rain > 20) {
+                adviceStr = `<strong>BÁO ĐỘNG ĐỎ (${d.day}/${d.month + 1}/${d.year}):</strong> Mưa lớn tích lũy (${rain.toFixed(1)}mm) kèm xác suất dự báo rất cao (${chance}%). Khuyến cáo trạm y tế chuẩn bị dịch truyền, bố trí giường điều trị sốt xuất huyết dự phòng ngập lụt cục bộ.`;
+            } else if (chance > 70 && rain <= 20) {
+                adviceStr = `<strong>CẢNH BÁO HÀNH ĐỘNG (${d.day}/${d.month + 1}/${d.year}):</strong> Dự báo mưa cao (${chance}%) nhưng lượng mưa thực tế thấp (${rain.toFixed(1)}mm). Thúc đẩy truyền thông cộng đồng dọn dẹp lu chứa nước phế thải quanh nhà sau cơn mưa nhỏ.`;
+            } else if (chance <= 40 && rain > 15) {
+                adviceStr = `<strong>SỰ KIỆN ĐỘT XUẤT (${d.day}/${d.month + 1}/${d.year}):</strong> Mưa lớn bất chợt (${rain.toFixed(1)}mm) dù xác suất dự báo thấp (${chance}%). Cần theo dõi sát vì ao tù đọng nước mới xuất hiện là ổ bọ gậy lý tưởng.`;
+            } else {
+                adviceStr = `<strong>TRẠNG THÁI ỔN ĐỊNH (${d.day}/${d.month + 1}/${d.year}):</strong> Điều kiện thời tiết khô ráo. Trạm y tế tiếp tục duy trì hoạt động tuyên truyền thường quy và giám sát mật độ muỗi.`;
+            }
+
+            d3.select("#advice-text").html(adviceStr);
+        }
+    </script>
+</body>
+
+</html>
