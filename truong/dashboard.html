@@ -24,7 +24,6 @@
 </head>
 
 <body>
-
     <div id="loading">
         <div class="spinner"></div>
         <p>Đang tải dữ liệu khí tượng địa lý...</p>
@@ -53,6 +52,7 @@
                     <option value="all">Cả năm</option>
                 </select>
             </div>
+            <a class="back-button" href="../index.html">Back</a>
         </div>
     </header>
 
@@ -855,6 +855,7 @@
             const containerId = "chart-sunrange";
             const legendId = "legend-sunrange";
             const dim = getChartDimensions(containerId, 220);
+            dim.margin.left = 76;
 
             d3.select(`#${containerId}`).selectAll("*").remove();
             d3.select(`#${legendId}`).selectAll("*").remove();
@@ -876,8 +877,6 @@
                 .domain(monthlyStatsData.map(d => d.monthName))
                 .range([0, width]);
 
-            // Sunrise ranges: ~05:00 - 06:30, Sunset ranges: ~17:00 - 19:00.
-            // We set Y axis from 4.0 AM (4h) to 20.0 PM (20h).
             const y = d3.scaleLinear()
                 .domain([4, 20])
                 .range([height, 0]);

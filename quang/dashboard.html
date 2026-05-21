@@ -2,95 +2,16 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Khí tượng Nông nghiệp Việt Nam</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-        }
-        h1, h3 { text-align: center; color: #2c3e50; margin: 5px 0; }
-        h3 { color: #7f8c8d; font-weight: normal; margin-bottom: 20px; }
-        
-        .filter-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 25px;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            max-width: 900px;
-            margin-left: auto;
-            margin-right: auto;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .filter-group label {
-            font-weight: bold;
-            color: #34495e;
-            font-size: 14px;
-        }
-        .filter-container select, .filter-container input {
-            padding: 8px 12px;
-            font-size: 14px;
-            border-radius: 4px;
-            border: 1px solid #bdc3c7;
-            outline: none;
-            cursor: pointer;
-        }
-        .filter-container select { min-width: 180px; }
-        .filter-container input { width: 140px; }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            max-width: 1300px;
-            margin: 0 auto;
-        }
-        .full-width-chart { grid-column: span 2; }
-        .chart-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .chart-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #34495e;
-            margin-bottom: 5px;
-            border-left: 4px solid #3498db;
-            padding-left: 10px;
-        }
-        .tooltip {
-            position: absolute;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            pointer-events: none;
-            opacity: 0;
-            z-index: 10;
-        }
-        .legend { font-size: 12px; cursor: pointer; }
-        .static-legend { font-size: 12px; }
-        .axis-title { font-size: 11px; fill: #555; font-weight: 500; }
-        .loading { text-align: center; font-size: 18px; color: #3498db; margin-top: 50px; }
-    </style>
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+    <a class="back-button" href="../index.html">Back</a>
 
     <h1>Dashboard Phân tích Khí tượng Nông nghiệp</h1>
 
