@@ -24,7 +24,6 @@
 </head>
 
 <body>
-
     <div id="loading">
         <div class="spinner"></div>
         <p>Đang tải dữ liệu khí tượng địa lý...</p>
@@ -32,7 +31,7 @@
 
     <header>
         <div class="header-title">
-            <h1>VIETNAM CLIMATE GEOSPATIAL & SUNLIGHT DASHBOARD</h1>
+            <h1>Dashboard Thời Tiết Việt Nam</h1>
             <p>Trực quan hóa Bản đồ nhiệt độ toàn quốc, Lượng mưa & Thời gian mặt trời mọc/lặn</p>
         </div>
         <div class="controls">
@@ -46,6 +45,14 @@
                 <option value="2024">2024</option>
                 <option value="2025">2025</option>
             </select>
+
+            <div class="map-controls">
+                <label for="month-select">Tháng:</label>
+                <select id="month-select">
+                    <option value="all">Cả năm</option>
+                </select>
+            </div>
+            <a class="back-button" href="../index.html">Back</a>
         </div>
     </header>
 
@@ -61,18 +68,6 @@
     </div>
 
     <div class="dashboard-grid">
-
-        <!-- CARD 1: Vietnam Temperature Map -->
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    <span>Bản đồ Nhiệt độ trung bình toàn quốc</span>
-                </div>
-            </div>
-            <div id="map"></div>
-            <div class="legend-container" id="map-legend"></div>
-        </div>
-
         <!-- Right Column of Charts -->
         <div class="charts-column">
 
@@ -80,7 +75,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
-                        <span id="precip-chart-title">Lượng mưa trung bình</span>
+                        <span id="precip-chart-title">Lượng mưa</span>
                     </div>
                     <div class="card-subtitle" id="precip-chart-subtitle">
                         Lượng mưa tích lũy trung bình từng tháng
@@ -110,6 +105,24 @@
 
         </div>
 
+                <!-- CARD 1: Vietnam Temperature Map -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>Bản đồ Nhiệt độ trung bình toàn quốc</span>
+                </div>
+            </div>
+            <div id="map-container" style="position: relative;">
+                <div id="map"></div>
+                <button id="home-button" title="Reset View">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="legend-container" id="map-legend"></div>
+        </div>
     </div>
 
     <!-- Tooltips for map and charts -->
@@ -125,8 +138,9 @@
         let locStats = new Map();
         let currentLocation = "TP. Hồ Chí Minh";
         let currentYear = "2024";
+        let currentMonth = "all"; // "all" or 0-11
         let monthlyStatsData = [];
-        
+
         let map;
 
         // Month Abbreviations
@@ -135,13 +149,7 @@
         // Setup Custom Temperature Color Scale (Diverging: Green -> White -> Orange)
         const tempColorScale = d3.scaleDiverging()
             .domain([15, 22, 32]) // Min, Mid (balance point), Max
-            .interpolator(d3.interpolateRdYlGn); // A green-yellow-red scale, good for temperatures. We can customize.
-
-        // Let's create a custom Green-to-Orange interpolator
-        const customInterpolator = t => d3.interpolateRgb("green", "orange")(t);
-        const tempInterpolator = d3.interpolateRgbBasis(["#1a9850", "#ffffbf", "#d73027"]); // Green-Yellow-Red
-
-        tempColorScale.interpolator(tempInterpolator);
+            .interpolator(d3.interpolateRgbBasis(["#1a9850", "#ffffbf", "#d73027"])); // Green-Yellow-Red
 
         // Helper to get dimensions of chart containers dynamically
         const getChartDimensions = (containerId, heightVal = 220) => {
@@ -246,6 +254,9 @@
                     tooltip.style("opacity", 0);
                 },
                 click: function (e) {
+                    const layer = e.target;
+                    map.fitBounds(layer.getBounds());
+
                     const stats = locStats.get(normGeoName);
                     if (stats) {
                         selectProvince(stats.originalName);
@@ -304,35 +315,69 @@
                 filtered = filtered.filter(d => d.year === parseInt(currentYear));
             }
 
-            const monthGroups = d3.group(filtered, d => d.month);
             const stats = [];
 
-            for (let m = 0; m < 12; m++) {
-                const days = monthGroups.get(m) || [];
-                const hasData = days.length > 0;
+            if (currentMonth === "all") {
+                const monthGroups = d3.group(filtered, d => d.month);
+                for (let m = 0; m < 12; m++) {
+                    const days = monthGroups.get(m) || [];
+                    const hasData = days.length > 0;
 
-                const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), d => d.year);
-                const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
+                    const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), d => d.year);
+                    const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
 
-                const avgSunrise = hasData ? d3.mean(days.filter(d => d.sunrise_hours !== null), d => d.sunrise_hours) : null;
-                const avgSunset = hasData ? d3.mean(days.filter(d => d.sunset_hours !== null), d => d.sunset_hours) : null;
-                const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
+                    const avgSunrise = hasData ? d3.mean(days.filter(d => d.sunrise_hours !== null), d => d.sunrise_hours) : null;
+                    const avgSunset = hasData ? d3.mean(days.filter(d => d.sunset_hours !== null), d => d.sunset_hours) : null;
+                    const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
 
-                stats.push({
-                    month: m,
-                    monthName: monthNames[m],
-                    avgPrecip: avgPrecip,
-                    avgSunrise: avgSunrise,
-                    avgSunset: avgSunset,
-                    daylightDuration: avgDaylight,
-                    hasData: hasData
-                });
+                    stats.push({
+                        month: m,
+                        monthName: monthNames[m],
+                        avgPrecip: avgPrecip,
+                        avgSunrise: avgSunrise,
+                        avgSunset: avgSunset,
+                        daylightDuration: avgDaylight,
+                        hasData: hasData,
+                        isDayView: false
+                    });
+                }
+            } else {
+                const mNum = parseInt(currentMonth);
+                filtered = filtered.filter(d => d.month === mNum);
+                const dayGroups = d3.group(filtered, d => d.dateParsed.getDate());
+                
+                const yearNum = currentYear !== "all" ? parseInt(currentYear) : 2024;
+                const daysInMonth = new Date(yearNum, mNum + 1, 0).getDate();
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const days = dayGroups.get(d) || [];
+                    const hasData = days.length > 0;
+
+                    const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), data => data.year);
+                    const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
+
+                    const avgSunrise = hasData ? d3.mean(days.filter(x => x.sunrise_hours !== null), x => x.sunrise_hours) : null;
+                    const avgSunset = hasData ? d3.mean(days.filter(x => x.sunset_hours !== null), x => x.sunset_hours) : null;
+                    const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
+
+                    stats.push({
+                        month: d - 1, // zero-indexed to match logic elsewhere safely
+                        monthName: d.toString(), // '1', '2', etc.
+                        avgPrecip: avgPrecip,
+                        avgSunrise: avgSunrise,
+                        avgSunset: avgSunset,
+                        daylightDuration: avgDaylight,
+                        hasData: hasData,
+                        isDayView: true,
+                        dayNumber: d
+                    });
+                }
             }
             return stats;
         }
 
         // Expose shared highlight function for synchronization
-        window.highlightMonth = function(monthIndex, event, source) {
+        window.highlightMonth = function (monthIndex, event, source) {
             const tooltipPrecip = d3.select("#tooltip-precipitation");
             const tooltipSunrange = d3.select("#tooltip-sunrange");
 
@@ -341,11 +386,11 @@
                 d3.selectAll(".precip-bar")
                     .style("fill-opacity", null)
                     .style("stroke", null);
-                
+
                 d3.select("#sunrange-track-line").style("display", "none");
                 d3.select("#sunrange-sunrise-dot").style("display", "none");
                 d3.select("#sunrange-sunset-dot").style("display", "none");
-                
+
                 tooltipPrecip.style("opacity", 0);
                 tooltipSunrange.style("opacity", 0);
                 return;
@@ -382,10 +427,11 @@
 
             // 3. Populate and show precipitation tooltip
             tooltipPrecip.style("opacity", 1);
+            const titleLabel = stats.isDayView ? `Ngày ${stats.dayNumber}/${parseInt(currentMonth) + 1}` : `Tháng ${stats.month + 1}`;
             tooltipPrecip.html(`
-                <div class="tooltip-title" style="color: #60a5fa; border-bottom-color: rgba(96, 165, 250, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-title" style="color: #60a5fa; border-bottom-color: rgba(96, 165, 250, 0.3);">${currentLocation} - ${titleLabel}</div>
                 <div class="tooltip-row">
-                    <span class="tooltip-label">Lượng mưa TB:</span>
+                    <span class="tooltip-label">Lượng mưa:</span>
                     <span class="tooltip-val" style="color:#60a5fa">${stats.avgPrecip.toFixed(1)} mm</span>
                 </div>
             `);
@@ -393,7 +439,7 @@
             // 4. Populate and show sunrise/sunset tooltip
             tooltipSunrange.style("opacity", 1);
             tooltipSunrange.html(`
-                <div class="tooltip-title" style="color: var(--warning-color); border-bottom-color: rgba(251, 191, 36, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-title" style="color: var(--warning-color); border-bottom-color: rgba(251, 191, 36, 0.3);">${currentLocation} - ${titleLabel}</div>
                 <div class="tooltip-row">
                     <span class="tooltip-label">Mặt trời mọc:</span>
                     <span class="tooltip-val" style="color:var(--warning-color); font-weight:bold;">${decimalHoursToTimeString(stats.avgSunrise)}</span>
@@ -455,8 +501,6 @@
             data.forEach(d => {
                 d['day.avgtemp_c'] = +d['day.avgtemp_c'];
                 d['day.totalprecip_mm'] = +d['day.totalprecip_mm'];
-                d['location.lat'] = +d['location.lat'];
-                d['location.lon'] = +d['location.lon'];
 
                 d.dateParsed = d3.timeParse("%Y-%m-%d")(d.date);
                 d.month = d.dateParsed ? d.dateParsed.getMonth() : null; // 0-11
@@ -489,6 +533,20 @@
                 .property("selected", d => d === currentLocation)
                 .text(d => d);
 
+            // Populate Month Dropdown
+            const monthSelect = d3.select("#month-select");
+            monthSelect.selectAll("option")
+                .data(["all", ...monthNames])
+                .enter()
+                .append("option")
+                .attr("value", (d, i) => d === "all" ? "all" : i - 1)
+                .text((d, i) => d === "all" ? "Cả năm" : `Tháng ${i}`);
+
+            monthSelect.on("change", function () {
+                currentMonth = this.value;
+                updateCharts();
+            });
+
             // Populate Dropdown Change Listeners
             locationSelect.on("change", function () {
                 selectProvince(this.value);
@@ -507,11 +565,6 @@
 
             if (map) {
                 map.invalidateSize();
-                if (geojsonLayer) {
-                    try {
-                        map.fitBounds(geojsonLayer.getBounds());
-                    } catch (e) {}
-                }
             }
 
             // Responsive behavior
@@ -537,11 +590,11 @@
 
         // Initialize Leaflet Map
         function initMap() {
-            let initialZoom = window.innerWidth < 768 ? 5 : 5.8;
+            const initialZoom = 6;
             map = L.map('map', {
                 zoomControl: true,
                 scrollWheelZoom: false
-            }).setView([16.4, 107.5], initialZoom); // Center on Vietnam coordinates
+            }).setView([16.4, 107.5], initialZoom);
 
             // CartoDB Dark Matter tile layer
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -556,14 +609,14 @@
                     style: styleFeature,
                     onEachFeature: onEachFeature
                 }).addTo(map);
-
-                // Auto-center and zoom map on Vietnam boundaries
-                try {
-                    map.fitBounds(geojsonLayer.getBounds());
-                } catch (e) {
-                    console.warn("Could not fit bounds of GeoJSON layer:", e);
-                }
             }
+
+            // Home button functionality
+            document.getElementById('home-button').addEventListener('click', () => {
+                if (geojsonLayer) {
+                    map.fitBounds(geojsonLayer.getBounds(), { padding: [50, 50] });
+                }
+            });
         }
 
         // Highlight selected province marker on the map
@@ -576,24 +629,16 @@
         // Select a province and propagate to dashboard
         function selectProvince(provinceName) {
             currentLocation = provinceName;
-            
+
             // Update UI elements
             d3.select("#location-select").property("value", provinceName);
             d3.select("#sunrange-chart-subtitle").text(`Dao động thời gian bình minh, hoàng hôn và số giờ ban ngày trung bình theo tháng tại ${provinceName}`);
-            
-            updatePrecipitationSubtitle();
 
             // Highlight Map Marker
             highlightMapMarker(provinceName);
-            
-            // Re-render dependent charts
-            drawSunrangeChart();
-            drawPrecipitationChart();
-        }
 
-        function updatePrecipitationSubtitle() {
-            const subtitle = d3.select("#precip-chart-subtitle");
-            const title = d3.select("#precip-chart-title");
+            // Recompute cached aggregates before re-rendering dependent charts.
+            updateCharts();
         }
 
         // Render Map Legend
@@ -607,8 +652,8 @@
 
             legendDiv.append("div").html(`
                 <div style="display: flex; flex-direction: column; width: 100%; gap: 6px;">
-                    <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Nhiệt độ trung bình (°C)</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-secondary); width: 100%;">
+                    <div style="font-size: 15px; color: var(--text-secondary); text-align: center;">Nhiệt độ trung bình (°C)</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: var(--text-secondary); width: 100%;">
                         <span>${minTemp.toFixed(1)}°C</span>
                         <div style="flex-grow: 1; margin: 0 12px; height: 8px; border-radius: 4px; background: linear-gradient(to right, #1a9850, #ffffbf, #d73027);"></div>
                         <span>${maxTemp.toFixed(1)}°C</span>
@@ -627,7 +672,6 @@
             drawMapLegend();
 
             // 2. Redraw Precipitation Bar Chart
-            updatePrecipitationSubtitle();
             drawPrecipitationChart();
 
             // 3. Redraw Sunrise/Sunset Range Chart
@@ -646,16 +690,17 @@
                 const yNum = parseInt(currentYear);
                 mapData = mapData.filter(d => d.year === yNum);
             }
+            if (currentMonth !== "all") {
+                const mNum = parseInt(currentMonth);
+                mapData = mapData.filter(d => d.month === mNum);
+            }
 
             // Group by location to compute average stats
             const locRollup = d3.rollup(mapData,
                 v => {
                     return {
                         avgTemp: d3.mean(v, d => d['day.avgtemp_c']),
-                        // avgTemp: d3.mean(v, d => d['day.avgtemp_c']),
                         totalPrecip: d3.mean(d3.rollup(v, s => d3.sum(s, x => x['day.totalprecip_mm']), d => `${d.year}-${d.month}`).values()), // Average monthly total
-                        lat: v[0]['location.lat'],
-                        lon: v[0]['location.lon'],
                         sunrise_avg: d3.mean(v.filter(x => x.sunrise_hours !== null), x => x.sunrise_hours),
                         sunset_avg: d3.mean(v.filter(x => x.sunset_hours !== null), x => x.sunset_hours)
                     };
@@ -671,14 +716,6 @@
                     ...val
                 });
             });
-
-            // Update color scale domain dynamically based on current data range
-            const temps = Array.from(locStats.values()).map(d => d.avgTemp).filter(t => !isNaN(t) && t !== null);
-            if (temps.length > 0) {
-                const minTemp = d3.min(temps);
-                const maxTemp = d3.max(temps);
-                tempColorScale.domain([minTemp, maxTemp]);
-            }
 
             // Update style of all features dynamically based on new temperature stats
             geojsonLayer.setStyle(styleFeature);
@@ -720,7 +757,7 @@
 
             // Scales
             const x = d3.scaleBand()
-                .domain(monthNames)
+                .domain(monthlyStatsData.map(d => d.monthName))
                 .range([0, width])
                 .padding(0.3);
 
@@ -795,11 +832,17 @@
                     .text(`Ngưỡng mưa lớn (${heavyRainThreshold}mm)`);
             }
 
+            // Update Subtitle
+            const isAllYear = currentMonth === "all";
+            d3.select("#precip-chart-subtitle").text(
+                isAllYear ? "Tổng lượng mưa tích lũy trong tháng" : "Lượng mưa trong ngày"
+            );
+
             // Legend
             d3.select(`#${legendId}`).append("div").html(`
                 <div class="legend-item">
                     <div class="legend-color" style="background: linear-gradient(180deg, #60a5fa, #3b82f6);"></div>
-                    <span>Lượng mưa trung bình tháng (mm)</span>
+                    <span>${isAllYear ? "Lượng mưa trung bình tháng (mm)" : "Lượng mưa trung bình ngày (mm)"}</span>
                 </div>
             `);
         }
@@ -811,6 +854,7 @@
             const containerId = "chart-sunrange";
             const legendId = "legend-sunrange";
             const dim = getChartDimensions(containerId, 220);
+            dim.margin.left = 76;
 
             d3.select(`#${containerId}`).selectAll("*").remove();
             d3.select(`#${legendId}`).selectAll("*").remove();
@@ -829,11 +873,9 @@
 
             // Scales
             const x = d3.scalePoint()
-                .domain(monthNames)
+                .domain(monthlyStatsData.map(d => d.monthName))
                 .range([0, width]);
 
-            // Sunrise ranges: ~05:00 - 06:30, Sunset ranges: ~17:00 - 19:00.
-            // We set Y axis from 4.0 AM (4h) to 20.0 PM (20h).
             const y = d3.scaleLinear()
                 .domain([4, 20])
                 .range([height, 0]);

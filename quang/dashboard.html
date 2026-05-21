@@ -2,95 +2,16 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Khí tượng Nông nghiệp Việt Nam</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-        }
-        h1, h3 { text-align: center; color: #2c3e50; margin: 5px 0; }
-        h3 { color: #7f8c8d; font-weight: normal; margin-bottom: 20px; }
-        
-        .filter-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 25px;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            max-width: 900px;
-            margin-left: auto;
-            margin-right: auto;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .filter-group label {
-            font-weight: bold;
-            color: #34495e;
-            font-size: 14px;
-        }
-        .filter-container select, .filter-container input {
-            padding: 8px 12px;
-            font-size: 14px;
-            border-radius: 4px;
-            border: 1px solid #bdc3c7;
-            outline: none;
-            cursor: pointer;
-        }
-        .filter-container select { min-width: 180px; }
-        .filter-container input { width: 140px; }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            max-width: 1300px;
-            margin: 0 auto;
-        }
-        .full-width-chart { grid-column: span 2; }
-        .chart-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .chart-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #34495e;
-            margin-bottom: 5px;
-            border-left: 4px solid #3498db;
-            padding-left: 10px;
-        }
-        .tooltip {
-            position: absolute;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            pointer-events: none;
-            opacity: 0;
-            z-index: 10;
-        }
-        .legend { font-size: 12px; cursor: pointer; }
-        .static-legend { font-size: 12px; }
-        .axis-title { font-size: 11px; fill: #555; font-weight: 500; }
-        .loading { text-align: center; font-size: 18px; color: #3498db; margin-top: 50px; }
-    </style>
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+    <a class="back-button" href="../index.html">Back</a>
 
     <h1>Dashboard Phân tích Khí tượng Nông nghiệp</h1>
 
@@ -281,6 +202,14 @@
             // CHART 1 (Dual Axis) - LABELS ĐẦY ĐỦ
             // ==========================================
             const svg1 = d3.select("#chart1").append("svg").attr("width", widthFull + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const defs1 = svg1.append("defs");
+            const uvBarGrad = defs1.append("linearGradient")
+                .attr("id", "uv-bar-grad")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            uvBarGrad.append("stop").attr("offset", "0%").attr("stop-color", "#fbbf24").attr("stop-opacity", 0.95);
+            uvBarGrad.append("stop").attr("offset", "100%").attr("stop-color", "#f97316").attr("stop-opacity", 0.45);
             
             const x1 = d3.scaleBand().domain(timeDomain).range([0, widthFull]).padding(0.3);
             const y1L = d3.scaleLinear().domain([d3.min(timelineData, d => d.daylight) - 0.2, d3.max(timelineData, d => d.daylight) + 0.2]).range([height, 0]);
@@ -296,7 +225,7 @@
 
             // Chú thích (Legend)
             const legend1 = svg1.append("g").attr("class", "static-legend").attr("transform", `translate(${widthFull / 2 - 150}, -20)`);
-            legend1.append("rect").attr("width", 15).attr("height", 10).attr("fill", "#f39c12").attr("opacity", 0.6);
+            legend1.append("rect").attr("width", 15).attr("height", 10).attr("fill", "url(#uv-bar-grad)").attr("rx", 2);
             legend1.append("text").attr("x", 22).attr("y", 10).text("Chỉ số UV (Cột)");
             legend1.append("line").attr("x1", 150).attr("x2", 170).attr("y1", 5).attr("y2", 5).attr("stroke", "#2ecc71").attr("stroke-width", 3);
             legend1.append("circle").attr("cx", 160).attr("cy", 5).attr("r", 3.5).attr("fill", "#27ae60");
@@ -305,7 +234,8 @@
             // Vẽ Bars
             svg1.selectAll(".bar-uv").data(timelineData).enter().append("rect")
                 .attr("x", d => x1(d.period)).attr("width", x1.bandwidth())
-                .attr("fill", "#f39c12").attr("opacity", 0.5)
+                .attr("fill", "url(#uv-bar-grad)")
+                .attr("rx", 3)
                 .attr("y", height).attr("height", 0)
                 .transition().duration(1000).delay((d, i) => i * 50)
                 .attr("y", d => y1R(d.uv)).attr("height", d => height - y1R(d.uv));
@@ -364,6 +294,15 @@
             // CHART 3 (Bar Chart) - Chỉ mưa
             // ==========================================
             const svg3 = d3.select("#chart3").append("svg").attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const defs3 = svg3.append("defs");
+            const precipBarGrad = defs3.append("linearGradient")
+                .attr("id", "quang-precip-bar-grad")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            precipBarGrad.append("stop").attr("offset", "0%").attr("stop-color", "#60a5fa").attr("stop-opacity", 0.9);
+            precipBarGrad.append("stop").attr("offset", "100%").attr("stop-color", "#3b82f6").attr("stop-opacity", 0.4);
+
             const x30 = d3.scaleBand().domain(timeDomain).range([0, width]).padding(0.3);
             const y3 = d3.scaleLinear().domain([0, d3.max(timelineData, d => d.precip) * 1.2]).range([height, 0]);
 
@@ -376,7 +315,7 @@
             const g3 = svg3.selectAll(".g3").data(timelineData).enter().append("g").attr("transform", d => `translate(${x30(d.period)},0)`);
             
             // Bar Mưa
-            g3.append("rect").attr("x", 0).attr("width", x30.bandwidth()).attr("fill", "#3498db")
+            g3.append("rect").attr("x", 0).attr("width", x30.bandwidth()).attr("fill", "url(#quang-precip-bar-grad)").attr("rx", 3)
                 .attr("y", height).attr("height", 0)
                 .transition().duration(1000).delay((d, i) => i * 40)
                 .attr("y", d => y3(d.precip)).attr("height", d => height - y3(d.precip));
