@@ -32,7 +32,7 @@
 
     <header>
         <div class="header-title">
-            <h1>VIETNAM CLIMATE GEOSPATIAL & SUNLIGHT DASHBOARD</h1>
+            <h1>Dashboard Thời Tiết Việt Nam</h1>
             <p>Trực quan hóa Bản đồ nhiệt độ toàn quốc, Lượng mưa & Thời gian mặt trời mọc/lặn</p>
         </div>
         <div class="controls">
@@ -46,6 +46,13 @@
                 <option value="2024">2024</option>
                 <option value="2025">2025</option>
             </select>
+
+            <div class="map-controls">
+                <label for="month-select">Tháng:</label>
+                <select id="month-select">
+                    <option value="all">Cả năm</option>
+                </select>
+            </div>
         </div>
     </header>
 
@@ -61,32 +68,6 @@
     </div>
 
     <div class="dashboard-grid">
-
-        <!-- CARD 1: Vietnam Temperature Map -->
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    <span>Bản đồ Nhiệt độ trung bình toàn quốc</span>
-                    <div class="map-controls">
-                        <label for="month-select">Tháng:</label>
-                        <select id="month-select">
-                            <option value="all">Cả năm</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <div id="map-container" style="position: relative;">
-                <div id="map"></div>
-                <button id="home-button" title="Reset View">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
-                        height="20">
-                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                    </svg>
-                </button>
-            </div>
-            <div class="legend-container" id="map-legend"></div>
-        </div>
-
         <!-- Right Column of Charts -->
         <div class="charts-column">
 
@@ -94,7 +75,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
-                        <span id="precip-chart-title">Lượng mưa trung bình</span>
+                        <span id="precip-chart-title">Lượng mưa</span>
                     </div>
                     <div class="card-subtitle" id="precip-chart-subtitle">
                         Lượng mưa tích lũy trung bình từng tháng
@@ -124,6 +105,24 @@
 
         </div>
 
+                <!-- CARD 1: Vietnam Temperature Map -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span>Bản đồ Nhiệt độ trung bình toàn quốc</span>
+                </div>
+            </div>
+            <div id="map-container" style="position: relative;">
+                <div id="map"></div>
+                <button id="home-button" title="Reset View">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="legend-container" id="map-legend"></div>
+        </div>
     </div>
 
     <!-- Tooltips for map and charts -->
@@ -316,29 +315,63 @@
                 filtered = filtered.filter(d => d.year === parseInt(currentYear));
             }
 
-            const monthGroups = d3.group(filtered, d => d.month);
             const stats = [];
 
-            for (let m = 0; m < 12; m++) {
-                const days = monthGroups.get(m) || [];
-                const hasData = days.length > 0;
+            if (currentMonth === "all") {
+                const monthGroups = d3.group(filtered, d => d.month);
+                for (let m = 0; m < 12; m++) {
+                    const days = monthGroups.get(m) || [];
+                    const hasData = days.length > 0;
 
-                const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), d => d.year);
-                const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
+                    const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), d => d.year);
+                    const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
 
-                const avgSunrise = hasData ? d3.mean(days.filter(d => d.sunrise_hours !== null), d => d.sunrise_hours) : null;
-                const avgSunset = hasData ? d3.mean(days.filter(d => d.sunset_hours !== null), d => d.sunset_hours) : null;
-                const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
+                    const avgSunrise = hasData ? d3.mean(days.filter(d => d.sunrise_hours !== null), d => d.sunrise_hours) : null;
+                    const avgSunset = hasData ? d3.mean(days.filter(d => d.sunset_hours !== null), d => d.sunset_hours) : null;
+                    const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
 
-                stats.push({
-                    month: m,
-                    monthName: monthNames[m],
-                    avgPrecip: avgPrecip,
-                    avgSunrise: avgSunrise,
-                    avgSunset: avgSunset,
-                    daylightDuration: avgDaylight,
-                    hasData: hasData
-                });
+                    stats.push({
+                        month: m,
+                        monthName: monthNames[m],
+                        avgPrecip: avgPrecip,
+                        avgSunrise: avgSunrise,
+                        avgSunset: avgSunset,
+                        daylightDuration: avgDaylight,
+                        hasData: hasData,
+                        isDayView: false
+                    });
+                }
+            } else {
+                const mNum = parseInt(currentMonth);
+                filtered = filtered.filter(d => d.month === mNum);
+                const dayGroups = d3.group(filtered, d => d.dateParsed.getDate());
+                
+                const yearNum = currentYear !== "all" ? parseInt(currentYear) : 2024;
+                const daysInMonth = new Date(yearNum, mNum + 1, 0).getDate();
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const days = dayGroups.get(d) || [];
+                    const hasData = days.length > 0;
+
+                    const yearsPrecipMap = d3.rollup(days, s => d3.sum(s, x => x['day.totalprecip_mm']), data => data.year);
+                    const avgPrecip = d3.mean(Array.from(yearsPrecipMap.values())) || 0;
+
+                    const avgSunrise = hasData ? d3.mean(days.filter(x => x.sunrise_hours !== null), x => x.sunrise_hours) : null;
+                    const avgSunset = hasData ? d3.mean(days.filter(x => x.sunset_hours !== null), x => x.sunset_hours) : null;
+                    const avgDaylight = (avgSunrise !== null && avgSunset !== null) ? (avgSunset - avgSunrise) : null;
+
+                    stats.push({
+                        month: d - 1, // zero-indexed to match logic elsewhere safely
+                        monthName: d.toString(), // '1', '2', etc.
+                        avgPrecip: avgPrecip,
+                        avgSunrise: avgSunrise,
+                        avgSunset: avgSunset,
+                        daylightDuration: avgDaylight,
+                        hasData: hasData,
+                        isDayView: true,
+                        dayNumber: d
+                    });
+                }
             }
             return stats;
         }
@@ -394,10 +427,11 @@
 
             // 3. Populate and show precipitation tooltip
             tooltipPrecip.style("opacity", 1);
+            const titleLabel = stats.isDayView ? `Ngày ${stats.dayNumber}/${parseInt(currentMonth) + 1}` : `Tháng ${stats.month + 1}`;
             tooltipPrecip.html(`
-                <div class="tooltip-title" style="color: #60a5fa; border-bottom-color: rgba(96, 165, 250, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-title" style="color: #60a5fa; border-bottom-color: rgba(96, 165, 250, 0.3);">${currentLocation} - ${titleLabel}</div>
                 <div class="tooltip-row">
-                    <span class="tooltip-label">Lượng mưa TB:</span>
+                    <span class="tooltip-label">Lượng mưa:</span>
                     <span class="tooltip-val" style="color:#60a5fa">${stats.avgPrecip.toFixed(1)} mm</span>
                 </div>
             `);
@@ -405,7 +439,7 @@
             // 4. Populate and show sunrise/sunset tooltip
             tooltipSunrange.style("opacity", 1);
             tooltipSunrange.html(`
-                <div class="tooltip-title" style="color: var(--warning-color); border-bottom-color: rgba(251, 191, 36, 0.3);">${currentLocation} - Tháng ${stats.month + 1}</div>
+                <div class="tooltip-title" style="color: var(--warning-color); border-bottom-color: rgba(251, 191, 36, 0.3);">${currentLocation} - ${titleLabel}</div>
                 <div class="tooltip-row">
                     <span class="tooltip-label">Mặt trời mọc:</span>
                     <span class="tooltip-val" style="color:var(--warning-color); font-weight:bold;">${decimalHoursToTimeString(stats.avgSunrise)}</span>
@@ -467,8 +501,6 @@
             data.forEach(d => {
                 d['day.avgtemp_c'] = +d['day.avgtemp_c'];
                 d['day.totalprecip_mm'] = +d['day.totalprecip_mm'];
-                d['location.lat'] = +d['location.lat'];
-                d['location.lon'] = +d['location.lon'];
 
                 d.dateParsed = d3.timeParse("%Y-%m-%d")(d.date);
                 d.month = d.dateParsed ? d.dateParsed.getMonth() : null; // 0-11
@@ -512,8 +544,7 @@
 
             monthSelect.on("change", function () {
                 currentMonth = this.value;
-                updateMapMarkers();
-                drawMapLegend();
+                updateCharts();
             });
 
             // Populate Dropdown Change Listeners
@@ -671,8 +702,6 @@
                     return {
                         avgTemp: d3.mean(v, d => d['day.avgtemp_c']),
                         totalPrecip: d3.mean(d3.rollup(v, s => d3.sum(s, x => x['day.totalprecip_mm']), d => `${d.year}-${d.month}`).values()), // Average monthly total
-                        lat: v[0]['location.lat'],
-                        lon: v[0]['location.lon'],
                         sunrise_avg: d3.mean(v.filter(x => x.sunrise_hours !== null), x => x.sunrise_hours),
                         sunset_avg: d3.mean(v.filter(x => x.sunset_hours !== null), x => x.sunset_hours)
                     };
@@ -729,7 +758,7 @@
 
             // Scales
             const x = d3.scaleBand()
-                .domain(monthNames)
+                .domain(monthlyStatsData.map(d => d.monthName))
                 .range([0, width])
                 .padding(0.3);
 
@@ -804,11 +833,17 @@
                     .text(`Ngưỡng mưa lớn (${heavyRainThreshold}mm)`);
             }
 
+            // Update Subtitle
+            const isAllYear = currentMonth === "all";
+            d3.select("#precip-chart-subtitle").text(
+                isAllYear ? "Tổng lượng mưa tích lũy trong tháng" : "Lượng mưa trong ngày"
+            );
+
             // Legend
             d3.select(`#${legendId}`).append("div").html(`
                 <div class="legend-item">
                     <div class="legend-color" style="background: linear-gradient(180deg, #60a5fa, #3b82f6);"></div>
-                    <span>Lượng mưa trung bình tháng (mm)</span>
+                    <span>${isAllYear ? "Lượng mưa trung bình tháng (mm)" : "Lượng mưa trung bình ngày (mm)"}</span>
                 </div>
             `);
         }
@@ -838,7 +873,7 @@
 
             // Scales
             const x = d3.scalePoint()
-                .domain(monthNames)
+                .domain(monthlyStatsData.map(d => d.monthName))
                 .range([0, width]);
 
             // Sunrise ranges: ~05:00 - 06:30, Sunset ranges: ~17:00 - 19:00.
