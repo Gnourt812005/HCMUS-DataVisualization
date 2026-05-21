@@ -31,6 +31,28 @@
             min-height: 100vh;
         }
 
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            min-height: 40px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            margin-left: 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+        }
+
+        .back-button:hover {
+            background-color: rgba(16, 185, 129, 0.15);
+            border-color: var(--accent-primary);
+            color: #34d399;
+        }
+
         header {
             display: flex;
             justify-content: space-between;
