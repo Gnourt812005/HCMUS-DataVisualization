@@ -637,9 +637,8 @@
             // Highlight Map Marker
             highlightMapMarker(provinceName);
 
-            // Re-render dependent charts
-            drawSunrangeChart();
-            drawPrecipitationChart();
+            // Recompute cached aggregates before re-rendering dependent charts.
+            updateCharts();
         }
 
         // Render Map Legend
