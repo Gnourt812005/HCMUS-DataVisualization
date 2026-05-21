@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Cảnh báo nguy cơ sinh vật gây hại</title>
+  <link rel="stylesheet" href="style.css?v=20260522-sidebar-legends" />
+</head>
+<body>
+  <main class="risk-dashboard">
+    <aside class="filter-panel" aria-label="Bộ lọc dashboard">
+      <div class="brand-block">
+        <!-- <p class="eyebrow">Bảo vệ thực vật</p> -->
+        <h1>Dashboard Theo dõi rủi ro khí hậu toàn quốc</h1>
+        <!-- <p class="subtitle">Theo dõi rủi ro thời tiết theo không gian, thành phần rủi ro và chuỗi ngày liên tục.</p> -->
+      </div>
+
+      <section class="panel-section">
+        <h2>Bộ lọc</h2>
+
+        <label class="control-label">
+          Giai đoạn
+          <select id="month-filter"></select>
+        </label>
+
+        <label class="control-label">
+          Vùng
+          <select id="region-filter"></select>
+        </label>
+
+        <label class="control-label">
+          Địa hình
+          <select id="terrain-filter"></select>
+        </label>
+
+        <fieldset class="metric-choice control-label">
+          <legend style="margin-bottom: 10px;">Loại rủi ro</legend>
+          <div id="metric-options" class="metric-options"></div>
+        </fieldset>
+
+        <button id="reset-btn" class="reset-button" type="button">Đặt lại</button>
+      </section>
+
+      <section class="panel-section legend-panel">
+        <!-- <h2>Chu giai</h2> -->
+        <div id="sidebar-metric-legend" class="sidebar-legend-block"></div>
+        <div id="sidebar-component-legend" class="sidebar-legend-block"></div>
+      </section>
+
+      <!-- <section class="panel-section note-box">
+        <h2>Đọc dashboard</h2>
+        <p>Chọn tỉnh trên bản đồ để xem chi tiết. Tích loại rủi ro để đổi màu bản đồ, bảng xếp hạng, donut và calendar score theo ngày.</p>
+      </section> -->
+    </aside>
+
+    <aside class="kpi-panel" aria-label="Tổng quan rủi ro" style="background: transparent; border: none; margin: 0px; padding: 0px; ">
+      <section class="kpi-list">
+        <article class="kpi-card">
+          <strong id="kpi-provinces">-</strong>
+          <span class="kpi-label">Tỉnh đang xem</span>
+        </article>
+        <article class="kpi-card">
+          <strong id="kpi-days">-</strong>
+          <span class="kpi-label">Ngày rủi ro cao liên tục</span>
+        </article>
+        <article class="kpi-card">
+          <strong id="kpi-high-days">-</strong>
+          <span class="kpi-label">Ngày cảnh báo</span>
+        </article>
+        <article class="kpi-card">
+          <strong id="kpi-top-province" style="height: 1.2em;">-</strong>
+          <span class="kpi-label">Tỉnh rủi ro cao nhất</span>
+        </article>
+      </section>
+
+      <section class="chart-card donut-card">
+        <div class="card-header compact">
+          <h2>Cơ cấu thành phần rủi ro</h2>
+        </div>
+        <div id="donut-chart" class="chart donut-chart"></div>
+      </section>
+    </aside>
+
+    <aside id="tooltip" class="tooltip" hidden></aside>
+
+    <section class="main-panel">
+      <section class="chart-grid">
+        <article class="chart-card map-card">
+          <div class="card-header">
+            <h2>Phân bố mức độ rủi ro toàn quốc</h2>
+            <span id="map-subtitle" class="chart-subtitle">Rủi ro trung bình</span>
+          </div>
+          <div id="map-chart" class="chart"></div>
+        </article>
+
+        <article class="chart-card bar-card">
+          <div class="card-header">
+            <h2>Xếp hạng &amp; thành phần rủi ro</h2>
+            <span id="bar-subtitle" class="chart-subtitle">Score xếp hạng theo mức độ rủi ro</span>
+          </div>
+          <div id="bar-chart" class="chart"></div>
+        </article>
+
+        <article class="chart-card streak-card">
+          <div class="card-header">
+            <h2>Chuỗi ngày rủi ro liên tục</h2>
+            <span id="streak-subtitle" class="chart-subtitle">Calendar score từng ngày · tỉnh Lâm Đồng</span>
+          </div>
+          <div id="timeline-chart" class="chart"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="script.js?v=20260522-map-zoom"></script>
+</body>
+</html>
