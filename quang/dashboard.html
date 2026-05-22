@@ -182,13 +182,13 @@
             const titleLocation = selectedProvince === "" ? `Vùng ${selectedRegion}` : selectedProvince;
             d3.select("#title-1").text(`Độ dài ban ngày & Bức xạ UV - ${titleLocation}`);
             d3.select("#title-2").text(`Tiểu khí hậu theo Địa hình - ${titleLocation}`);
-            d3.select("#title-3").text(`Lượng mưa trung bình - ${titleLocation}`);
+            d3.select("#title-3").text(`Lượng mưa tổng - ${titleLocation}`);
 
             const monthlyRollup = d3.rollups(filteredData,
                 v => ({
                     daylight: d3.mean(v, d => d.daylight) || 12,
                     uv: d3.mean(v, d => d.uv) || 0,
-                    precip: d3.mean(v, d => d.precip) || 0,
+                    precip: d3.sum(v, d => d.precip) || 0,
                     wind: d3.mean(v, d => d.wind) || 0,
                     minDateObj: d3.min(v, d => d.dateObj)
                 }),
@@ -332,7 +332,7 @@
             svg3.append("g").call(d3.axisLeft(y3));
 
             // Thêm Label cho các trục Chart 3
-            svg3.append("text").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Lượng mưa TB (mm)");
+            svg3.append("text").attr("transform", "rotate(-90)").attr("y", -45).attr("x", -height / 2).attr("text-anchor", "middle").attr("class", "axis-title").text("Lượng mưa tổng (mm)");
 
             const g3 = svg3.selectAll(".g3").data(timelineData).enter().append("g").attr("transform", d => `translate(${x30(d.period)},0)`);
             
@@ -344,7 +344,7 @@
 
             g3.selectAll(".bar-precip").on("mouseover", function(e, d) {
                 d3.select(this).raise().classed("is-hovered", true);
-                tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Mưa TB: ${d.precip.toFixed(1)} mm`);
+                tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Mưa tổng: ${d.precip.toFixed(1)} mm`);
             }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
                 d3.select(this).classed("is-hovered", false);
                 tooltip.style("opacity", 0);
