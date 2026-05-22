@@ -8,6 +8,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Leaflet.js Library for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -49,9 +56,29 @@
             <div class="chart-title" id="title-3">Chart 3: Nguy cơ Rủi ro Kép Mưa & Gió Giật</div>
             <div id="chart3"></div>
         </div>
+        <!-- Map Container for Total Rainfall -->
+        <div class="chart-container map-container full-width-chart">
+            <div class="chart-title">Bản đồ sự thay đổi Lượng Mưa theo khu vực</div>
+            <!-- Time Slider Controls -->
+            <div style="padding: 12px; background: rgba(21, 28, 44, 0.5); border-radius: 6px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                <label style="color: var(--text-secondary); font-size: 13px; min-width: 80px;">Thời gian:</label>
+                <input type="range" id="map-time-slider" style="flex-grow: 1; cursor: pointer;" />
+                <span id="map-time-display" style="color: var(--text-primary); font-size: 14px; font-weight: 500; min-width: 60px; text-align: right;"></span>
+            </div>
+            <div id="map-container" style="position: relative; height: 600px;">
+                <div id="precipitation-map" style="width: 100%; height: 100%;"></div>
+                <button id="map-home-button" title="Reset View" style="position: absolute; top: 10px; right: 10px; z-index: 1000; padding: 8px 12px; background: rgba(21, 28, 44, 0.9); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; color: var(--text-secondary);">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="display: inline;">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="legend-container" id="map-legend-rainfall"></div>
+        </div>
     </div>
 
     <div id="tooltip" class="tooltip" style="opacity: 0;"></div>
+    <div class="tooltip" id="main-tooltip-rainfall" style="opacity: 0;"></div>
 
     <script>
         function safeTimeToHours(timeStr) {
@@ -79,6 +106,227 @@
 
         let globalCleanedData = [];
         let globalColorScale; 
+        
+        // Global state for map
+        let map = null;
+        let geojsonData = null;
+        let geojsonLayer = null;
+        let precipitationStats = new Map();
+        
+        // Time-based map state
+        let allTimePeriods = [];
+        let selectedTimePeriodIndex = 0;
+        let mapDataByPeriod = {};
+        
+        // Color scale for precipitation (Blue gradient)
+        const precipColorScale = d3.scaleLinear()
+            .domain([0, 200, 400])
+            .range(["#e0f2fe", "#0ea5e9", "#1e40af"])
+            .interpolate(d3.interpolateRgb);
+
+        // Helper to normalize province names for GeoJSON mapping
+        function normalizeName(text) {
+            if (!text) return "";
+            let s = text.toLowerCase();
+            s = s.replace(/đ/g, "d");
+            s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            s = s.replace(/province/g, "")
+                .replace(/city/g, "")
+                .replace(/tp\./g, "")
+                .replace(/thành phố/g, "")
+                .replace(/thanh pho/g, "");
+            s = s.replace(/[^a-z0-9]/g, "");
+            return s;
+        }
+
+        // Initialize Leaflet Map for Precipitation
+        function initPrecipitationMap() {
+            const initialZoom = 6;
+            map = L.map('precipitation-map', {
+                zoomControl: true,
+                scrollWheelZoom: false
+            }).setView([16.4, 107.5], initialZoom);
+
+            // CartoDB Dark Matter tile layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            // Add GeoJSON boundaries if available
+            if (geojsonData) {
+                geojsonLayer = L.geoJSON(geojsonData, {
+                    style: styleFeatureRainfall,
+                    onEachFeature: onEachFeatureRainfall
+                }).addTo(map);
+            }
+
+            // Home button functionality
+            document.getElementById('map-home-button').addEventListener('click', () => {
+                if (geojsonLayer) {
+                    map.fitBounds(geojsonLayer.getBounds(), { padding: [50, 50] });
+                }
+            });
+        }
+
+        // Style function for GeoJSON features (Rainfall based)
+        function styleFeatureRainfall(feature) {
+            const normGeoName = normalizeName(feature.properties.Name);
+            const stats = precipitationStats.get(normGeoName);
+            
+            const fillColor = stats && !isNaN(stats.totalRainfall) ? precipColorScale(stats.totalRainfall) : '#151c2c';
+
+            return {
+                fillColor: fillColor,
+                weight: 0.8,
+                opacity: 1,
+                color: '#243049',
+                fillOpacity: 0.7
+            };
+        }
+
+        // Interactivity setup for each GeoJSON feature (Rainfall)
+        function onEachFeatureRainfall(feature, layer) {
+            const normGeoName = normalizeName(feature.properties.Name);
+
+            layer.on({
+                mouseover: function (e) {
+                    const stats = precipitationStats.get(normGeoName);
+                    if (!stats) return;
+
+                    layer.setStyle({
+                        weight: 2,
+                        color: '#ffffff',
+                        fillOpacity: 0.85
+                    });
+
+                    const tooltip = d3.select("#main-tooltip-rainfall");
+                    tooltip.style("opacity", 1);
+                    tooltip.html(`
+                        <div class="tooltip-title">${stats.originalName}</div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Tổng lượng mưa:</span>
+                            <span class="tooltip-val" style="color:${precipColorScale(stats.totalRainfall)}">${stats.totalRainfall.toFixed(1)} mm</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Trung bình/ngày:</span>
+                            <span class="tooltip-val" style="color:#60a5fa">${stats.avgRainfall ? stats.avgRainfall.toFixed(1) : '0.0'} mm</span>
+                        </div>
+                    `);
+                },
+                mousemove: function (e) {
+                    const tooltip = d3.select("#main-tooltip-rainfall");
+                    tooltip
+                        .style("left", (e.originalEvent.pageX + 15) + "px")
+                        .style("top", (e.originalEvent.pageY - 15) + "px");
+                },
+                mouseout: function (e) {
+                    layer.setStyle({
+                        weight: 0.8,
+                        color: '#243049',
+                        fillOpacity: 0.7
+                    });
+                    const tooltip = d3.select("#main-tooltip-rainfall");
+                    tooltip.style("opacity", 0);
+                }
+            });
+        }
+
+        // Update map markers with precipitation data
+        function updatePrecipitationMapMarkers(filteredData) {
+            if (!map || !geojsonLayer) return;
+
+            // Organize data by time periods
+            const periodGroups = d3.rollup(filteredData,
+                v => v,
+                d => d.timePeriod
+            );
+
+            // Create sorted list of periods
+            allTimePeriods = Array.from(periodGroups.keys()).sort();
+            mapDataByPeriod = Object.fromEntries(periodGroups);
+
+            // Initialize slider
+            const slider = d3.select("#map-time-slider");
+            slider.attr("min", 0).attr("max", Math.max(0, allTimePeriods.length - 1)).property("value", 0);
+            selectedTimePeriodIndex = 0;
+
+            // Update map display
+            updateMapByTimePeriod();
+
+            // Add slider event listener
+            slider.on("change", function() {
+                selectedTimePeriodIndex = +this.value;
+                updateMapByTimePeriod();
+            }).on("input", function() {
+                selectedTimePeriodIndex = +this.value;
+                updateMapByTimePeriod();
+            });
+        }
+
+        // Update map based on selected time period
+        function updateMapByTimePeriod() {
+            if (allTimePeriods.length === 0) return;
+
+            const selectedPeriod = allTimePeriods[selectedTimePeriodIndex];
+            const periodData = mapDataByPeriod[selectedPeriod] || [];
+
+            // Group by location to compute rainfall stats for this period
+            const locRollup = d3.rollup(periodData,
+                v => {
+                    const rainfallValues = v.map(d => d.precip);
+                    return {
+                        totalRainfall: d3.sum(v, d => d.precip),
+                        avgRainfall: d3.mean(rainfallValues)
+                    };
+                },
+                d => d.province
+            );
+
+            // Re-populate precipitationStats Map
+            precipitationStats.clear();
+            locRollup.forEach((val, name) => {
+                precipitationStats.set(normalizeName(name), {
+                    originalName: name,
+                    ...val
+                });
+            });
+
+            // Update time display
+            d3.select("#map-time-display").text(selectedPeriod);
+
+            // Update style and legend
+            drawRainfallLegend();
+        }
+
+        // Draw legend for rainfall map
+        function drawRainfallLegend() {
+            const legendDiv = d3.select("#map-legend-rainfall");
+            legendDiv.selectAll("*").remove();
+
+            const rainfalls = Array.from(precipitationStats.values()).map(d => d.totalRainfall).filter(r => !isNaN(r) && r !== null);
+            const minRain = rainfalls.length > 0 ? d3.min(rainfalls) : 0;
+            const maxRain = rainfalls.length > 0 ? d3.max(rainfalls) : 400;
+
+            // Update color scale domain based on actual data
+            precipColorScale.domain([minRain, (minRain + maxRain) / 2, maxRain]);
+
+            // Re-style map with new color scale
+            geojsonLayer.setStyle(styleFeatureRainfall);
+
+            legendDiv.append("div").html(`
+                <div style="display: flex; flex-direction: column; width: 100%; gap: 6px;">
+                    <div style="font-size: 15px; color: var(--text-secondary); text-align: center;">Tổng lượng mưa (mm)</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 15px; color: var(--text-secondary); width: 100%;">
+                        <span>${minRain.toFixed(1)} mm</span>
+                        <div style="flex-grow: 1; margin: 0 12px; height: 8px; border-radius: 4px; background: linear-gradient(to right, #e0f2fe, #0ea5e9, #1e40af);"></div>
+                        <span>${maxRain.toFixed(1)} mm</span>
+                    </div>
+                </div>
+            `);
+        }
+
 
         d3.csv("../dataset/dataset.csv").then(function(rawData) {
             rawData.forEach(d => {
@@ -158,8 +406,32 @@
             d3.select("#start-date").on("change", triggerUpdate);
             d3.select("#end-date").on("change", triggerUpdate);
 
-            updateDashboard(defaultRegion, "", formatDateIso(minDatasetDate), formatDateIso(maxDatasetDate));
+            // Load GeoJSON data
+            d3.json("../dataset/vietnam-provinces.geojson").then(function(geojson) {
+                geojsonData = geojson;
+                initPrecipitationMap();
+                updateDashboard(defaultRegion, "", formatDateIso(minDatasetDate), formatDateIso(maxDatasetDate));
+                
+                // Responsive behavior
+                window.addEventListener("resize", debounce(() => {
+                    if (map) map.invalidateSize();
+                }, 250));
+            }).catch(err => {
+                console.error("Lỗi tải GeoJSON:", err);
+                updateDashboard(defaultRegion, "", formatDateIso(minDatasetDate), formatDateIso(maxDatasetDate));
+            });
+        }).catch(err => {
+            console.error("Lỗi tải dữ liệu CSV:", err);
         });
+
+        // Debounce helper
+        function debounce(func, wait) {
+            let timeout;
+            return function (...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
 
         function updateDashboard(selectedRegion, selectedProvince, startDateStr, endDateStr) {
             d3.select("#chart1").html("");
@@ -179,10 +451,13 @@
                 return;
             }
 
+            // Update precipitation map
+            updatePrecipitationMapMarkers(filteredData);
+
             const titleLocation = selectedProvince === "" ? `Vùng ${selectedRegion}` : selectedProvince;
             d3.select("#title-1").text(`Độ dài ban ngày & Bức xạ UV - ${titleLocation}`);
             d3.select("#title-2").text(`Tiểu khí hậu theo Địa hình - ${titleLocation}`);
-            d3.select("#title-3").text(`Lượng mưa tổng - ${titleLocation}`);
+            d3.select("#title-3").text(`Lượng mưa theo tháng - ${titleLocation}`);
 
             const monthlyRollup = d3.rollups(filteredData,
                 v => ({
@@ -295,7 +570,7 @@
                 .attr("fill", d => globalColorScale(d.terrain)).attr("opacity", 0.6)
                 .on("mouseover", function(e, d) {
                     d3.select(this).raise().classed("is-hovered", true);
-                    tooltip.style("opacity", 1).html(`<b>${d.terrain}</b><br>Ngày: ${d.rawDateStr}<br>Biên độ nhiệt: ${d.tempDiff.toFixed(1)}°C<br>Độ ẩm: ${d.humidity}%`);
+                    tooltip.style("opacity", 1).html(`<b>${d.terrain}</b><br>Tỉnh/Thành phố: ${d.province}<br>Ngày: ${d.rawDateStr}<br>Biên độ nhiệt: ${d.tempDiff.toFixed(1)}°C<br>Độ ẩm: ${d.humidity}%`);
                 })
                 .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
                     d3.select(this).classed("is-hovered", false);
@@ -303,12 +578,31 @@
                 });
 
             const terrs = Array.from(new Set(filteredData.map(d => d.terrain))).sort();
+            const checkedTerrains = new Set(terrs); // All checked by default
             if(terrs.length > 0) {
                 const legend2 = svg2.selectAll(".legend").data(terrs).enter().append("g").attr("class", "legend").attr("transform", (d, i) => `translate(${width - 110}, ${i * 18 - 20})`);
                 legend2.append("circle").attr("r", 5).attr("fill", d => globalColorScale(d));
                 legend2.append("text").attr("x", 12).attr("y", 4).text(d => d);
-                legend2.on("mouseover", (e, t) => { dots.transition().duration(150).attr("opacity", d => d.terrain === t ? 0.9 : 0.05).attr("r", d => d.terrain === t ? 4.5 : 2); });
-                legend2.on("mouseleave", () => { dots.transition().duration(150).attr("opacity", 0.6).attr("r", 3); });
+                
+                // Add checkboxes below chart
+                const chart2Container = d3.select("#chart2");
+                const legendControls = chart2Container.append("div").style("margin-top", "12px").style("display", "flex").style("flex-wrap", "wrap").style("gap", "10px");
+                
+                terrs.forEach(terrain => {
+                    const label = legendControls.append("label").style("display", "flex").style("align-items", "center").style("gap", "6px").style("cursor", "pointer").style("user-select", "none");
+                    const checkbox = label.append("input").attr("type", "checkbox").attr("checked", true).style("cursor", "pointer");
+                    label.append("span").style("color", "var(--text-primary)").style("font-size", "13px").text(terrain);
+                    
+                    checkbox.on("change", function() {
+                        if (this.checked) {
+                            checkedTerrains.add(terrain);
+                        } else {
+                            checkedTerrains.delete(terrain);
+                        }
+                        // Update dots visibility
+                        dots.attr("opacity", d => checkedTerrains.has(d.terrain) ? 0.6 : 0);
+                    });
+                });
             }
 
 
