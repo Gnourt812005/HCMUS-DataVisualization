@@ -207,6 +207,36 @@ svg {
     background-color: transparent;
 }
 
+svg rect,
+svg circle,
+svg path {
+    transition: transform 0.18s ease, opacity 0.18s ease, filter 0.18s ease, stroke-width 0.18s ease;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+svg .bar-uv:hover,
+svg .bar-uv.is-hovered,
+svg .bar-precip:hover,
+svg .bar-precip.is-hovered {
+    transform: translateY(-4px) scaleY(1.05);
+    filter: brightness(1.18) saturate(1.08);
+    opacity: 0.96;
+}
+
+svg .dot2:hover,
+svg .dot2.is-hovered,
+svg .dot-dl:hover,
+svg .dot-dl.is-hovered {
+    transform: scale(1.45);
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.16));
+    opacity: 1;
+}
+
+svg path:hover {
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3));
+}
+
 svg text {
     fill: var(--text-secondary);
     font-family: "Outfit", sans-serif;

@@ -233,6 +233,7 @@
 
             // Vẽ Bars
             svg1.selectAll(".bar-uv").data(timelineData).enter().append("rect")
+                .attr("class", "bar-uv")
                 .attr("x", d => x1(d.period)).attr("width", x1.bandwidth())
                 .attr("fill", "url(#uv-bar-grad)")
                 .attr("rx", 3)
@@ -249,15 +250,30 @@
 
             // Vẽ Dots
             svg1.selectAll(".dot-dl").data(timelineData).enter().append("circle")
+                .attr("class", "dot-dl")
                 .attr("cx", d => x1(d.period) + x1.bandwidth() / 2).attr("cy", d => y1L(d.daylight))
                 .attr("fill", "#27ae60").attr("r", 0)
                 .transition().duration(400).delay(1800).attr("r", 4.5);
 
+            path1.raise();
+
+            const chart1TooltipHtml = (d) => `<b>Tháng: ${d.period}</b><br>UV Trung bình: ${d.uv.toFixed(1)}<br>Độ dài ban ngày: ${d.daylight.toFixed(2)} giờ`;
+
             // Tooltips
-            svg1.selectAll("rect").on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>UV Trung bình: ${d.uv.toFixed(1)}`))
-                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
-            svg1.selectAll("circle").on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Độ dài ban ngày: ${d.daylight.toFixed(2)} giờ`))
-                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+            svg1.selectAll(".bar-uv").on("mouseover", function(e, d) {
+                d3.select(this).raise().classed("is-hovered", true);
+                tooltip.style("opacity", 1).html(chart1TooltipHtml(d));
+            }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
+                d3.select(this).classed("is-hovered", false);
+                tooltip.style("opacity", 0);
+            });
+            svg1.selectAll(".dot-dl").on("mouseover", function(e, d) {
+                d3.select(this).raise().classed("is-hovered", true);
+                tooltip.style("opacity", 1).html(chart1TooltipHtml(d));
+            }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
+                d3.select(this).classed("is-hovered", false);
+                tooltip.style("opacity", 0);
+            });
 
 
             // ==========================================
@@ -277,8 +293,14 @@
             const dots = svg2.selectAll(".dot2").data(filteredData).enter().append("circle").attr("class", "dot2")
                 .attr("cx", d => x2(d.tempDiff)).attr("cy", d => y2(d.humidity)).attr("r", 3)
                 .attr("fill", d => globalColorScale(d.terrain)).attr("opacity", 0.6)
-                .on("mouseover", (e, d) => tooltip.style("opacity", 1).html(`<b>${d.terrain}</b><br>Ngày: ${d.rawDateStr}<br>Biên độ nhiệt: ${d.tempDiff.toFixed(1)}°C<br>Độ ẩm: ${d.humidity}%`))
-                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+                .on("mouseover", function(e, d) {
+                    d3.select(this).raise().classed("is-hovered", true);
+                    tooltip.style("opacity", 1).html(`<b>${d.terrain}</b><br>Ngày: ${d.rawDateStr}<br>Biên độ nhiệt: ${d.tempDiff.toFixed(1)}°C<br>Độ ẩm: ${d.humidity}%`);
+                })
+                .on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
+                    d3.select(this).classed("is-hovered", false);
+                    tooltip.style("opacity", 0);
+                });
 
             const terrs = Array.from(new Set(filteredData.map(d => d.terrain))).sort();
             if(terrs.length > 0) {
@@ -315,14 +337,18 @@
             const g3 = svg3.selectAll(".g3").data(timelineData).enter().append("g").attr("transform", d => `translate(${x30(d.period)},0)`);
             
             // Bar Mưa
-            g3.append("rect").attr("x", 0).attr("width", x30.bandwidth()).attr("fill", "url(#quang-precip-bar-grad)").attr("rx", 3)
+            g3.append("rect").attr("class", "bar-precip").attr("x", 0).attr("width", x30.bandwidth()).attr("fill", "url(#quang-precip-bar-grad)").attr("rx", 3)
                 .attr("y", height).attr("height", 0)
                 .transition().duration(1000).delay((d, i) => i * 40)
                 .attr("y", d => y3(d.precip)).attr("height", d => height - y3(d.precip));
 
-            g3.selectAll("rect").on("mouseover", function(e, d) {
+            g3.selectAll(".bar-precip").on("mouseover", function(e, d) {
+                d3.select(this).raise().classed("is-hovered", true);
                 tooltip.style("opacity", 1).html(`<b>Tháng: ${d.period}</b><br>Mưa TB: ${d.precip.toFixed(1)} mm`);
-            }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", () => tooltip.style("opacity", 0));
+            }).on("mousemove", e => tooltip.style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px")).on("mouseout", function() {
+                d3.select(this).classed("is-hovered", false);
+                tooltip.style("opacity", 0);
+            });
         }
     </script>
 </body>
