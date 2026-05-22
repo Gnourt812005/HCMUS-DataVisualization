@@ -180,9 +180,9 @@
             }
 
             const titleLocation = selectedProvince === "" ? `Vùng ${selectedRegion}` : selectedProvince;
-            d3.select("#title-1").text(`Chart 1: Độ dài ban ngày & Bức xạ UV - ${titleLocation}`);
-            d3.select("#title-2").text(`Chart 2: Tiểu khí hậu theo Địa hình - ${titleLocation}`);
-            d3.select("#title-3").text(`Chart 3: Lượng mưa trung bình - ${titleLocation}`);
+            d3.select("#title-1").text(`Độ dài ban ngày & Bức xạ UV - ${titleLocation}`);
+            d3.select("#title-2").text(`Tiểu khí hậu theo Địa hình - ${titleLocation}`);
+            d3.select("#title-3").text(`Lượng mưa trung bình - ${titleLocation}`);
 
             const monthlyRollup = d3.rollups(filteredData,
                 v => ({
