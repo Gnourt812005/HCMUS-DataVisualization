@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surveillance dịch tễ: Sốt xuất huyết & Bệnh mùa mưa</title>
+    <title>Sốt xuất huyết & Bệnh mùa mưa</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -334,9 +334,25 @@
                 hFactor = (humidity - 50) / 20; // linear scale between 50% and 70%
             }
 
-            // 3. Rainfall Factor (Combined rainfall volume and rain probability)
-            // Rain creates breeding pools, and high chance indicates weather pattern change.
-            let rainScore = Math.min(1, precip / 5) * 0.6 + (rainChance / 100) * 0.4;
+            // 3. Rainfall Factor (Refined biological model)
+            let rainScore = 0;
+            let baseChance = 0.15 * (rainChance / 100);
+
+            if (precip === 0) {
+                // If no rain, score relies slightly on rainChance (cloudy/low sunlight pre-rain conditions)
+                rainScore = baseChance;
+            } else if (precip > 0 && precip <= 10) {
+                // Light rain: linear increase from baseChance up to 0.8 (creates initial breeding sites)
+                rainScore = baseChance + (0.8 - baseChance) * (precip / 10);
+            } else if (precip > 10 && precip <= 50) {
+                // Ideal rain (10mm to 50mm): creates durable stagnant water bodies, max breeding risk
+                rainScore = 1.0;
+            } else {
+                // Flushing effect (precip > 50mm): heavy downpours wash away larvae, reducing risk
+                // It decreases linearly as precip increases, but holds a baseline of 0.2
+                // (representing indoor breeding containers that are protected from the flushing effect)
+                rainScore = Math.max(0.2, 1.0 - (precip - 50) / 100);
+            }
             
             // Mosquitoes need baseline humidity and temperature.
             // Stagnant water from rain boosts breeding (scaling the factor between 0.3 and 1.0)
