@@ -24,9 +24,19 @@
       <!-- BỘ LỌC ĐỘNG (Cập nhật tức thì khi nhấn, bỏ nút Áp dụng/Xuất) -->
       <div class="filter-panel">
         <div class="filter-item">
-          <span class="filter-label">Khu vực</span>
-          <select id="region-select" class="custom-select">
-            <option value="all">Tất cả khu vực</option>
+          <span class="filter-label">Thành phố</span>
+          <select id="city-select" class="custom-select">
+            <option value="all">Tất cả thành phố</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">Năm</span>
+          <select id="year-select" class="custom-select">
+          </select>
+        </div>
+        <div class="filter-item">
+          <span class="filter-label">Tháng</span>
+          <select id="month-select" class="custom-select">
           </select>
         </div>
         <div class="filter-item">
@@ -48,7 +58,6 @@
         <div class="card-header-v2">
           <div class="card-title-block">
             <h2>Xu Hướng Nhiệt Độ Giám Sát</h2>
-            <p>Thay thế dạng đa đường khó nhìn bằng Biểu đồ miền động (Area Chart) theo khu vực chọn</p>
           </div>
           <!-- CHÚ THÍCH (LEGEND) -->
           <div class="card-legend" id="weather-legend">
@@ -63,17 +72,17 @@
       <section class="grid-card col-6" id="card-risk">
         <div class="card-header-v2">
           <div class="card-title-block">
-            <h2>Chỉ Số Rủi Rơ Tuyến Vận Tải</h2>
-            <p>Phân loại mức độ nguy cơ: Thấp (Xanh), Trung bình (Vàng), Cao (Đỏ)</p>
+            <h2>Chỉ Số Rủi Ro Theo Thời Gian</h2>
+            <p>Sự biến động mức độ rủi ro qua các ngày</p>
           </div>
           <!-- CHÚ THÍCH (LEGEND) -->
           <div class="card-legend">
             <span class="legend-item"><span class="legend-dot r-low"></span>Thấp</span>
-            <span class="legend-item"><span class="legend-dot r-med"></span>Tuyến rủi ro</span>
-            <span class="legend-item"><span class="legend-dot r-high"></span>Nguy cơ cao</span>
+            <span class="legend-item"><span class="legend-dot r-med"></span>Trung bình</span>
+            <span class="legend-item"><span class="legend-dot r-high"></span>Cao</span>
           </div>
         </div>
-        <div class="chart-wrapper" id="risk-bar-chart"></div>
+        <div class="chart-wrapper" id="risk-line-chart"></div>
       </section>
 
       <!-- DÒNG DƯỚI: Biểu đồ Timeline Khung Giờ Giao Hàng Tối Ưu -->
@@ -93,6 +102,9 @@
       </section>
     </main>
   </div>
+  <div id="weather-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+  <div id="risk-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+  <div id="timeline-tooltip" class="chart-tooltip" aria-hidden="true"></div>
 
   <!-- Dự phòng dữ liệu mẫu để Dashboard hiển thị ngay lập tức nếu chưa có file CSV thực tế -->
   <script>
@@ -117,6 +129,10 @@
     ];
 
     let globalDataset = [];
+    let riskNodeByLabel = new Map();
+    let timelineNodeByLabel = new Map();
+    let weatherNodeByLabel = new Map();
+    let dailyDataGlobal = [];
 
     // Khởi tạo Dashboard
     async function init() {
@@ -140,10 +156,14 @@
         let region = d["location.region"] || "";
         // Viết tắt chữ Đồng Bằng thành ĐB theo yêu cầu
         region = region.replace(/Đồng Bằng/g, "ĐB").replace(/đồng bằng/g, "ĐB");
+        const dateParsed = d3.timeParse("%Y-%m-%d")(d.date) || new Date(d.date);
         return {
           ...d,
           "location.region": region,
-          dateParsed: d3.timeParse("%Y-%m-%d")(d.date) || new Date(d.date),
+          "location.name": d["location.name"] || region,
+          dateParsed,
+          year: dateParsed.getFullYear(),
+          month: dateParsed.getMonth() + 1,
           temp: +d["day.avgtemp_c"] || 0,
           rain: +d["day.totalprecip_mm"] || 0,
           wind: +d["day.maxwind_kph"] || 0,
@@ -151,106 +171,229 @@
         };
       });
 
-      // Tạo các lựa chọn cho thẻ chọn Khu vực
-      const uniqueRegions = [...new Set(globalDataset.map(d => d["location.region"]))].filter(Boolean);
-      const regionSelect = document.getElementById("region-select");
+      // Tạo các lựa chọn cho thẻ chọn Thành phố
+      const uniqueCities = [...new Set(globalDataset.map(d => d["location.name"]))].filter(Boolean);
+      const citySelect = document.getElementById("city-select");
       
       // Xóa các option cũ trừ option đầu tiên
-      while (regionSelect.options.length > 1) { regionSelect.remove(1); }
+      while (citySelect.options.length > 1) { citySelect.remove(1); }
       
-      uniqueRegions.forEach(r => {
+      uniqueCities.forEach(c => {
         const opt = document.createElement("option");
-        opt.value = r;
-        opt.textContent = r;
-        regionSelect.appendChild(opt);
+        opt.value = c;
+        opt.textContent = c;
+        citySelect.appendChild(opt);
+      });
+
+      // Tạo các lựa chọn cho thẻ chọn Năm
+      const uniqueYears = [...new Set(globalDataset.map(d => d.year))].filter(Boolean).sort((a, b) => a - b);
+      const yearSelect = document.getElementById("year-select");
+
+      yearSelect.innerHTML = "";
+      uniqueYears.forEach(year => {
+        const opt = document.createElement("option");
+        opt.value = year;
+        opt.textContent = year;
+        yearSelect.appendChild(opt);
+      });
+
+      // Tạo các lựa chọn cho thẻ chọn Tháng
+      const uniqueMonths = [...new Set(globalDataset.map(d => d.month))].filter(Boolean).sort((a, b) => a - b);
+      const monthSelect = document.getElementById("month-select");
+
+      monthSelect.innerHTML = "";
+      uniqueMonths.forEach(month => {
+        const opt = document.createElement("option");
+        opt.value = month;
+        opt.textContent = `Tháng ${month}`;
+        monthSelect.appendChild(opt);
       });
     }
 
     // Thiết lập sự kiện thay đổi bộ lọc lập tức cập nhật biểu đồ (Reactive)
     function setupFilterListeners() {
-      document.getElementById("region-select").addEventListener("change", updateDashboard);
+      document.getElementById("city-select").addEventListener("change", updateDashboard);
+      document.getElementById("year-select").addEventListener("change", updateDashboard);
+      document.getElementById("month-select").addEventListener("change", updateDashboard);
       document.getElementById("risk-select").addEventListener("change", updateDashboard);
     }
 
     // Hàm tổng điều phối lọc dữ liệu và vẽ lại biểu đồ
     function updateDashboard() {
-      const selectedRegion = document.getElementById("region-select").value;
+      const selectedCity = document.getElementById("city-select").value;
+      const selectedYear = document.getElementById("year-select").value;
+      const selectedMonth = document.getElementById("month-select").value;
       const selectedRisk = document.getElementById("risk-select").value;
 
-      // 1. Lọc dữ liệu theo Khu vực chọn
       let filteredData = globalDataset;
-      if (selectedRegion !== "all") {
-        filteredData = filteredData.filter(d => d["location.region"] === selectedRegion);
+      if (selectedYear) {
+        filteredData = filteredData.filter(d => d.year === Number(selectedYear));
       }
 
-      // Cập nhật nhãn chú thích của biểu đồ Nhiệt độ để người dùng biết đang xem vùng nào
-      const legendText = document.getElementById("weather-legend-text");
-      legendText.textContent = selectedRegion === "all" ? "Nhiệt độ trung bình toàn quốc (°C)" : `Nhiệt độ vùng ${selectedRegion} (°C)`;
+      if (selectedMonth) {
+        filteredData = filteredData.filter(d => d.month === Number(selectedMonth));
+      }
 
-      // Tính chỉ số rủi ro cho bước lọc rủi ro thứ hai
-      const riskSummaryMap = d3.rollups(
-        filteredData,
-        v => {
-          const rain = d3.mean(v, d => d.rain);
-          const wind = d3.mean(v, d => d.wind);
-          const vis = d3.mean(v, d => d.vis);
-          return rain + wind - vis;
-        },
-        d => d["location.region"]
-      ).map(([region, score]) => {
+      if (selectedCity !== "all") {
+        filteredData = filteredData.filter(d => d["location.name"] === selectedCity);
+      }
+
+      // Cập nhật nhãn chú thích của biểu đồ Nhiệt độ
+      const legendText = document.getElementById("weather-legend-text");
+      legendText.textContent = selectedCity === "all" ? "Nhiệt độ trung bình toàn quốc (°C)" : `Nhiệt độ thành phố ${selectedCity} (°C)`;
+
+      // Xử lý gom nhóm dữ liệu theo ngày
+      const dateGroups = d3.groups(filteredData, d => d.date);
+      let dailyData = dateGroups.map(([dateStr, records]) => {
+        const temp = d3.mean(records, r => r.temp);
+        const rain = d3.mean(records, r => r.rain);
+        const wind = d3.mean(records, r => r.wind);
+        const vis = d3.mean(records, r => r.vis);
+        const score = Math.max(0, rain + wind - vis);
+        
         let level = "low";
         if (score > 35) level = "high";
         else if (score > 15) level = "medium";
-        return { region, score: Math.max(0, score), level };
-      });
+        
+        const parseTime = d3.timeParse("%I:%M %p");
+        // Lấy bình minh, hoàng hôn của record đầu tiên trong nhóm
+        const sunriseData = records[0]["astro.sunrise"] || "06:00 AM";
+        const sunsetData = records[0]["astro.sunset"] || "06:00 PM";
+        const sunrise = parseTime(sunriseData);
+        const sunset = parseTime(sunsetData);
+        const durationHours = Math.max(0, (sunset - sunrise) / 36e5);
 
-      // Lọc danh sách vùng hiển thị ở biểu đồ Rủi ro & Timeline theo mức độ rủi ro đã chọn
-      let activeRegions = riskSummaryMap;
+        return {
+          dateStr,
+          date: records[0].dateParsed,
+          temp,
+          score,
+          level,
+          sunrise,
+          sunset,
+          durationHours
+        };
+      }).sort((a, b) => a.date - b.date);
+
       if (selectedRisk !== "all") {
-        activeRegions = riskSummaryMap.filter(r => r.level === selectedRisk);
+        dailyData = dailyData.filter(d => d.level === selectedRisk);
       }
-      const allowedRegionNames = activeRegions.map(r => r.region);
+      
+      dailyDataGlobal = dailyData;
 
       // Tiến hành dựng lại 3 biểu đồ
-      drawWeatherAreaChart(filteredData, selectedRegion);
-      drawRiskBarChart(riskSummaryMap, allowedRegionNames);
-      drawDeliveryTimelineChart(filteredData, allowedRegionNames);
+      drawWeatherAreaChart(dailyDataGlobal);
+      drawRiskLineChart(dailyDataGlobal);
+      drawDeliveryBarChart(dailyDataGlobal);
     }
 
-    // --- BIỂU ĐỒ 1: AREA CHART (Thay cho Đa đường rối mắt) ---
-    function drawWeatherAreaChart(data, regionMode) {
+    function positionTooltipNearNode(selector, node) {
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      d3.select(selector)
+        .style("left", `${window.scrollX + rect.right + 12}px`)
+        .style("top", `${window.scrollY + rect.top + rect.height / 2 - 18}px`);
+    }
+
+    function showTooltip(selector, html, node) {
+      d3.select(selector)
+        .attr("aria-hidden", "false")
+        .html(html)
+        .style("opacity", 1);
+      positionTooltipNearNode(selector, node);
+    }
+
+    function hideTooltips() {
+      d3.selectAll("#weather-tooltip, #risk-tooltip, #timeline-tooltip")
+        .attr("aria-hidden", "true")
+        .style("opacity", 0);
+      d3.selectAll(".hover-line").style("opacity", 0);
+    }
+
+    function weatherTooltipHtml(d) {
+      const formatTime = d3.timeFormat("%d/%m/%Y");
+      return `
+        <div class="tooltip-title">${formatTime(d.date)}</div>
+        <div class="tooltip-row"><span>Nhiệt độ</span><strong>${d.temp.toFixed(1)}°C</strong></div>
+      `;
+    }
+
+    function riskLevelText(level) {
+      if (level === "high") return "Cao";
+      if (level === "medium") return "Trung bình";
+      return "Thấp";
+    }
+
+    function formatTimelineTime(dateValue) {
+      return d3.timeFormat("%H:%M")(dateValue);
+    }
+
+    function riskTooltipHtml(d) {
+      const formatTime = d3.timeFormat("%d/%m/%Y");
+      return `
+        <div class="tooltip-title">${formatTime(d.date)}</div>
+        <div class="tooltip-row"><span>Chỉ số rủi ro</span><strong>${d.score.toFixed(1)}</strong></div>
+        <div class="tooltip-row"><span>Mức rủi ro</span><strong>${riskLevelText(d.level)}</strong></div>
+      `;
+    }
+
+    function timelineTooltipHtml(d) {
+      const formatTime = d3.timeFormat("%d/%m/%Y");
+      return `
+        <div class="tooltip-title">${formatTime(d.date)}</div>
+        <div class="tooltip-row"><span>Bình minh</span><strong>${formatTimelineTime(d.sunrise)}</strong></div>
+        <div class="tooltip-row"><span>Hoàng hôn</span><strong>${formatTimelineTime(d.sunset)}</strong></div>
+        <div class="tooltip-row"><span>Thời lượng</span><strong>${d.durationHours.toFixed(1)} giờ</strong></div>
+      `;
+    }
+
+    function showLinkedTooltips(dateStr) {
+      const dataPoint = dailyDataGlobal.find(d => d.dateStr === dateStr);
+      if (!dataPoint) return;
+
+      const rNode = riskNodeByLabel.get(dateStr);
+      if (rNode) {
+        showTooltip("#risk-tooltip", riskTooltipHtml(dataPoint), rNode);
+        const cx = d3.select(rNode).attr("cx");
+        d3.select("#risk-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
+      }
+
+      const tNode = timelineNodeByLabel.get(dateStr);
+      if (tNode) {
+        showTooltip("#timeline-tooltip", timelineTooltipHtml(dataPoint), tNode);
+        const xPos = parseFloat(d3.select(tNode).attr("x")) + parseFloat(d3.select(tNode).attr("width")) / 2;
+        d3.select("#timeline-hover-line").attr("x1", xPos).attr("x2", xPos).style("opacity", 1);
+      }
+
+      const wNode = weatherNodeByLabel.get(dateStr);
+      if (wNode) {
+        showTooltip("#weather-tooltip", weatherTooltipHtml(dataPoint), wNode);
+        const cx = d3.select(wNode).attr("cx");
+        d3.select("#weather-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
+      }
+    }
+
+    // --- BIỂU ĐỒ 1: AREA CHART ---
+    function drawWeatherAreaChart(displayData) {
       const containerId = "weather-area-chart";
       const container = document.getElementById(containerId);
       const width = container.clientWidth;
       const height = container.clientHeight;
       d3.select(`#${containerId}`).selectAll("*").remove();
 
+      weatherNodeByLabel = new Map();
+
       const margin = { top: 15, right: 15, bottom: 25, left: 35 };
       const chartW = width - margin.left - margin.right;
       const chartH = height - margin.top - margin.bottom;
-      if (chartW <= 0 || chartH <= 0) return;
-
-      // Xử lý gom nhóm dữ liệu theo ngày nếu hiển thị "Tất cả khu vực" (Tính trung bình cộng)
-      let displayData = [];
-      if (regionMode === "all") {
-        const dateGroups = d3.groups(data, d => d.date);
-        dateGroups.forEach(([dateStr, records]) => {
-          displayData.push({
-            date: records[0].dateParsed,
-            temp: d3.mean(records, r => r.temp)
-          });
-        });
-      } else {
-        displayData = data.map(d => ({ date: d.dateParsed, temp: d.temp }));
-      }
-      displayData.sort((a, b) => a.date - b.date);
+      if (chartW <= 0 || chartH <= 0 || !displayData.length) return;
 
       const svg = d3.select(`#${containerId}`)
         .append("svg").attr("width", width).attr("height", height)
         .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
       const x = d3.scaleTime().domain(d3.extent(displayData, d => d.date)).range([0, chartW]);
-      const y = d3.scaleLinear().domain([0, d3.max(globalDataset, d => d.temp) + 2 || 40]).range([chartH, 0]).nice();
+      const y = d3.scaleLinear().domain([0, d3.max(displayData, d => d.temp) + 5 || 40]).range([chartH, 0]).nice();
 
       // Vẽ lưới phụ ẩn nền dạng nét đứt mảnh
       svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(5).tickSize(-chartW).tickFormat(""));
@@ -268,103 +411,147 @@
       svg.append("path").datum(displayData).attr("d", areaGenerator).attr("fill", "url(#temp-gradient)");
       svg.append("path").datum(displayData).attr("d", lineGenerator).attr("fill", "none").attr("stroke", "#3b82f6").attr("stroke-width", 2.5);
 
+      // Vạch kẻ đứt khi Hover
+      svg.append("line").attr("id", "weather-hover-line").attr("class", "hover-line")
+        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
+        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
+
+      svg.selectAll(".weather-dot")
+        .data(displayData).enter().append("circle").attr("class", "weather-dot")
+        .attr("cx", d => x(d.date)).attr("cy", d => y(d.temp)).attr("r", 4)
+        .attr("fill", "#fff")
+        .attr("stroke", "#3b82f6")
+        .attr("stroke-width", 1.5)
+        .each(function(d) {
+          weatherNodeByLabel.set(d.dateStr, this);
+        })
+        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mouseout", hideTooltips);
+
       // Trục Tọa độ
       svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
-        .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}`));
+        .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}/${d.getDate()}`));
       svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5).tickFormat(d => `${d}°`));
     }
 
-    // --- BIỂU ĐỒ 2: RISK BAR CHART (Màu sắc theo ngưỡng rủi ro thực tế) ---
-    function drawRiskBarChart(riskMap, allowedRegions) {
-      const containerId = "risk-bar-chart";
+    // --- BIỂU ĐỒ 2: RISK LINE CHART ---
+    function drawRiskLineChart(chartData) {
+      const containerId = "risk-line-chart";
       const container = document.getElementById(containerId);
+      if (!container) return;
+      
       const width = container.clientWidth;
       const height = container.clientHeight;
       d3.select(`#${containerId}`).selectAll("*").remove();
 
-      // Lọc danh sách vùng theo bộ lọc rủi ro phối hợp
-      const chartData = riskMap.filter(d => allowedRegions.includes(d.region));
-      chartData.sort((a, b) => b.score - a.score);
+      riskNodeByLabel = new Map();
 
-      const margin = { top: 10, right: 25, bottom: 25, left: 95 };
+      const margin = { top: 15, right: 15, bottom: 25, left: 45 };
       const chartW = width - margin.left - margin.right;
       const chartH = height - margin.top - margin.bottom;
-      if (chartW <= 0 || chartH <= 0) return;
+      if (chartW <= 0 || chartH <= 0 || !chartData.length) return;
 
       const svg = d3.select(`#${containerId}`)
         .append("svg").attr("width", width).attr("height", height)
         .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-      const x = d3.scaleLinear().domain([0, Math.max(50, d3.max(riskMap, d => d.score)) || 100]).range([0, chartW]).nice();
-      const y = d3.scaleBand().domain(chartData.map(d => d.region)).range([0, chartH]).padding(0.28);
+      const x = d3.scaleTime().domain(d3.extent(chartData, d => d.date)).range([0, chartW]);
+      const y = d3.scaleLinear().domain([0, d3.max(chartData, d => d.score) + 10 || 50]).range([chartH, 0]).nice();
 
-      svg.append("g").attr("class", "grid-lines").attr("transform", `translate(0,${chartH})`).call(d3.axisBottom(x).ticks(5).tickSize(-chartH).tickFormat(""));
+      svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(5).tickSize(-chartW).tickFormat(""));
 
-      // Đổ thanh bar với hàm chọn màu trực quan theo điều kiện rủi ro thương mại
-      svg.selectAll(".bar")
-        .data(chartData).enter().append("rect").attr("class", "bar")
-        .attr("x", 0).attr("y", d => y(d.region)).attr("width", d => x(d.score)).attr("height", y.bandwidth())
+      const lineGen = d3.line().x(d => x(d.date)).y(d => y(d.score)).curve(d3.curveMonotoneX);
+
+      svg.append("path")
+        .datum(chartData)
+        .attr("fill", "none")
+        .attr("stroke", "#64748b")
+        .attr("stroke-width", 2)
+        .attr("d", lineGen);
+
+      // Vạch kẻ đứt khi Hover
+      svg.append("line").attr("id", "risk-hover-line").attr("class", "hover-line")
+        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
+        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
+
+      svg.selectAll(".risk-dot")
+        .data(chartData).enter().append("circle").attr("class", "risk-dot")
+        .attr("cx", d => x(d.date)).attr("cy", d => y(d.score)).attr("r", 5)
         .attr("fill", d => {
-          if (d.level === "high") return "#ef4444";  // Đỏ rực nguy hiểm
-          if (d.level === "medium") return "#f59e0b"; // Cam cảnh báo
-          return "#10b981";                           // Xanh an toàn hoàn hảo
+          if (d.level === "high") return "#ef4444";
+          if (d.level === "medium") return "#f59e0b";
+          return "#10b981";
         })
-        .attr("rx", 4);
+        .each(function(d) {
+          riskNodeByLabel.set(d.dateStr, this);
+        })
+        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mouseout", hideTooltips);
 
-      svg.append("g").attr("class", "axis-y-bar").call(d3.axisLeft(y).tickSize(0));
-      svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x").call(d3.axisBottom(x).ticks(5));
+      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5));
+      svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
+         .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}/${d.getDate()}`));
     }
 
-    // --- BIỂU ĐỒ 3: DELIVERY TIMELINE RANGE CHART ---
-    function drawDeliveryTimelineChart(rawData, allowedRegions) {
+    // --- BIỂU ĐỒ 3: DELIVERY TIMELINE BAR CHART (X: Day, Y: Cửa sổ thời gian) ---
+    function drawDeliveryBarChart(chartData) {
       const containerId = "delivery-timeline-chart";
       const container = document.getElementById(containerId);
       const width = container.clientWidth;
       const height = container.clientHeight;
       d3.select(`#${containerId}`).selectAll("*").remove();
 
-      const parseTime = d3.timeParse("%I:%M %p");
-      
-      // Tổng hợp dữ liệu độc bản của từng vùng để làm dải thời gian cố định
-      const mapStore = new Map();
-      rawData.forEach(d => {
-        if (allowedRegions.includes(d["location.region"]) && !mapStore.has(d["location.region"])) {
-          mapStore.set(d["location.region"], {
-            region: d["location.region"],
-            sunrise: parseTime(d["astro.sunrise"]) || parseTime("06:00 AM"),
-            sunset: parseTime(d["astro.sunset"]) || parseTime("06:00 PM")
-          });
-        }
-      });
-      const chartData = Array.from(mapStore.values());
+      timelineNodeByLabel = new Map();
 
-      const margin = { top: 10, right: 25, bottom: 25, left: 95 };
+      const margin = { top: 15, right: 15, bottom: 25, left: 45 };
       const chartW = width - margin.left - margin.right;
       const chartH = height - margin.top - margin.bottom;
-      if (chartW <= 0 || chartH <= 0) return;
+      if (chartW <= 0 || chartH <= 0 || !chartData.length) return;
 
       const svg = d3.select(`#${containerId}`)
         .append("svg").attr("width", width).attr("height", height)
         .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-      const x = d3.scaleTime().domain([parseTime("12:00 AM"), parseTime("11:59 PM")]).range([0, chartW]);
-      const y = d3.scaleBand().domain(chartData.map(d => d.region)).range([0, chartH]).padding(0.35);
+      const x = d3.scaleBand().domain(chartData.map(d => d.dateStr)).range([0, chartW]).padding(0.2);
+      
+      const parseTime = d3.timeParse("%I:%M %p");
+      // Scale Y ngược: sáng sơm ở dưới, chiều tối ở trên; Y coordinates in SVG go from 0 (top) to H (bottom).
+      // So domain [04:00 AM, 08:00 PM] mapped to [chartH, 0] means 8 PM is top.
+      const y = d3.scaleTime().domain([parseTime("04:00 AM"), parseTime("08:00 PM")]).range([chartH, 0]);
 
-      svg.append("g").attr("class", "grid-lines").attr("transform", `translate(0,${chartH})`).call(d3.axisBottom(x).ticks(d3.timeHour.every(2)).tickSize(-chartH).tickFormat(""));
+      svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(d3.timeHour.every(2)).tickSize(-chartW).tickFormat(""));
+
+      // Vạch kẻ đứt khi Hover
+      svg.append("line").attr("id", "timeline-hover-line").attr("class", "hover-line")
+        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
+        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
 
       svg.selectAll(".timeline-bar")
         .data(chartData).enter().append("rect").attr("class", "timeline-bar")
-        .attr("x", d => x(d.sunrise))
-        .attr("y", d => y(d.region))
-        .attr("width", d => Math.max(0, x(d.sunset) - x(d.sunrise)))
-        .attr("height", y.bandwidth())
+        .attr("x", d => x(d.dateStr))
+        // Sunset is later, so smaller Y value (higher position); Sunrise is earlier, larger Y value
+        .attr("y", d => y(d.sunset))
+        .attr("width", x.bandwidth())
+        .attr("height", d => Math.max(0, y(d.sunrise) - y(d.sunset)))
         .attr("fill", "#14b8a6")
         .attr("opacity", 0.9)
-        .attr("rx", 5);
+        .attr("rx", 3)
+        .each(function(d) {
+          timelineNodeByLabel.set(d.dateStr, this);
+        })
+        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mouseout", hideTooltips);
 
-      svg.append("g").attr("class", "axis-y-bar").call(d3.axisLeft(y).tickSize(0));
+      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(d3.timeHour.every(2)).tickFormat(d3.timeFormat("%H:%M")));
       svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
-        .call(d3.axisBottom(x).ticks(d3.timeHour.every(2)).tickFormat(d3.timeFormat("%H:%M")));
+        .call(d3.axisBottom(x).tickValues(x.domain().filter((d,i) => !(i%Math.ceil(chartData.length/6))))
+        .tickFormat(d => {
+          const pt = d3.timeParse("%Y-%m-%d")(d);
+          return pt ? `T${pt.getMonth() + 1}/${pt.getDate()}` : d; 
+        }));
     }
 
     // Kích hoạt toàn hệ thống bảng điều khiển điều hướng thông minh
