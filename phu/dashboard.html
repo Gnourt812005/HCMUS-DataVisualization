@@ -26,7 +26,6 @@
         <div class="filter-item">
           <span class="filter-label">Thành phố</span>
           <select id="city-select" class="custom-select">
-            <option value="all">Tất cả thành phố</option>
           </select>
         </div>
         <div class="filter-item">
@@ -39,37 +38,55 @@
           <select id="month-select" class="custom-select">
           </select>
         </div>
-        <div class="filter-item">
-          <span class="filter-label">Mức rủi ro</span>
-          <select id="risk-select" class="custom-select">
-            <option value="all">Tất cả mức độ</option>
-            <option value="high">Cao (Nguy cơ delay)</option>
-            <option value="medium">Trung bình</option>
-            <option value="low">Thấp (An toàn)</option>
-          </select>
-        </div>
       </div>
     </header>
 
     <!-- MAIN DASHBOARD GRID (Full-screen, không cuộn) -->
     <main class="dashboard-grid">
-      <!-- CỘT TRÁI: Thay thế Multi-line bằng Biểu đồ Miền (Area Chart) tương tác động theo Bộ lọc -->
-      <section class="grid-card col-6" id="card-weather">
+      <!-- DÒNG TRÊN: Lượng Mưa (Rain) -->
+      <section class="grid-card col-4" id="card-rain">
         <div class="card-header-v2">
           <div class="card-title-block">
-            <h2>Xu Hướng Nhiệt Độ Giám Sát</h2>
+            <h2>Lượng Mưa</h2>
           </div>
-          <!-- CHÚ THÍCH (LEGEND) -->
-          <div class="card-legend" id="weather-legend">
-            <span class="legend-dot color-temp"></span>
-            <span id="weather-legend-text">Nhiệt độ trung bình (°C)</span>
+          <div class="card-legend">
+            <span class="legend-dot" style="background:#3b82f6;"></span>
+            <span>(mm)</span>
           </div>
         </div>
-        <div class="chart-wrapper" id="weather-area-chart"></div>
+        <div class="chart-wrapper" id="rain-chart"></div>
       </section>
 
-      <!-- CỘT PHẢI: Xếp hạng rủi ro vận chuyển với màu sắc trực quan tương ứng mức độ -->
-      <section class="grid-card col-6" id="card-risk">
+      <!-- DÒNG TRÊN: Sức Gió (Wind) -->
+      <section class="grid-card col-4" id="card-wind">
+        <div class="card-header-v2">
+          <div class="card-title-block">
+            <h2>Sức Gió</h2>
+          </div>
+          <div class="card-legend">
+            <span class="legend-dot" style="background:#86efac;"></span>
+            <span>(km/h)</span>
+          </div>
+        </div>
+        <div class="chart-wrapper" id="wind-chart"></div>
+      </section>
+
+      <!-- DÒNG TRÊN: Tầm Nhìn (Vision) -->
+      <section class="grid-card col-4" id="card-vision">
+        <div class="card-header-v2">
+          <div class="card-title-block">
+            <h2>Tầm Nhìn</h2>
+          </div>
+          <div class="card-legend">
+            <span class="legend-dot" style="background:#d4d4aa;"></span>
+            <span>(km)</span>
+          </div>
+        </div>
+        <div class="chart-wrapper" id="vision-chart"></div>
+      </section>
+
+      <!-- DÒNG DƯỚI: Xếp hạng rủi ro vận chuyển với màu sắc trực quan tương ứng mức độ -->
+      <section class="grid-card col-12" id="card-risk">
         <div class="card-header-v2">
           <div class="card-title-block">
             <h2>Chỉ Số Rủi Ro Theo Thời Gian</h2>
@@ -84,54 +101,20 @@
         </div>
         <div class="chart-wrapper" id="risk-line-chart"></div>
       </section>
-
-      <!-- DÒNG DƯỚI: Biểu đồ Timeline Khung Giờ Giao Hàng Tối Ưu -->
-      <section class="grid-card col-12" id="card-timeline">
-        <div class="card-header-v2">
-          <div class="card-title-block">
-            <h2>Khung Giờ Vận Chuyển Lý Tưởng Trong Ngày</h2>
-            <p>Khoảng thời gian an toàn dựa trên dữ liệu Bình minh & Hoàng hôn thực tế tại các vùng</p>
-          </div>
-          <!-- CHÚ THÍCH (LEGEND) -->
-          <div class="card-legend">
-            <span class="legend-dot color-time"></span>
-            <span>Cửa sổ giao hàng an toàn (Daylight)</span>
-          </div>
-        </div>
-        <div class="chart-wrapper" id="delivery-timeline-chart"></div>
-      </section>
     </main>
   </div>
-  <div id="weather-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+  <div id="rain-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+  <div id="wind-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+  <div id="vision-tooltip" class="chart-tooltip" aria-hidden="true"></div>
   <div id="risk-tooltip" class="chart-tooltip" aria-hidden="true"></div>
-  <div id="timeline-tooltip" class="chart-tooltip" aria-hidden="true"></div>
 
   <!-- Dự phòng dữ liệu mẫu để Dashboard hiển thị ngay lập tức nếu chưa có file CSV thực tế -->
   <script>
-    const mockData = [
-      { "date": "2026-05-18", "location.region": "ĐB Sông Hồng", "day.avgtemp_c": "28", "day.totalprecip_mm": "5", "day.maxwind_kph": "15", "day.avgvis_km": "9", "astro.sunrise": "05:15 AM", "astro.sunset": "06:30 PM" },
-      { "date": "2026-05-19", "location.region": "ĐB Sông Hồng", "day.avgtemp_c": "29", "day.totalprecip_mm": "2", "day.maxwind_kph": "12", "day.avgvis_km": "10", "astro.sunrise": "05:15 AM", "astro.sunset": "06:30 PM" },
-      { "date": "2026-05-20", "location.region": "ĐB Sông Hồng", "day.avgtemp_c": "31", "day.totalprecip_mm": "25", "day.maxwind_kph": "35", "day.avgvis_km": "5", "astro.sunrise": "05:15 AM", "astro.sunset": "06:31 PM" },
-      { "date": "2026-05-21", "location.region": "ĐB Sông Hồng", "day.avgtemp_c": "27", "day.totalprecip_mm": "40", "day.maxwind_kph": "28", "day.avgvis_km": "4", "astro.sunrise": "05:16 AM", "astro.sunset": "06:31 PM" },
-      { "date": "2026-05-22", "location.region": "ĐB Sông Hồng", "day.avgtemp_c": "26", "day.totalprecip_mm": "12", "day.maxwind_kph": "14", "day.avgvis_km": "8", "astro.sunrise": "05:16 AM", "astro.sunset": "06:32 PM" },
-      
-      { "date": "2026-05-18", "location.region": "ĐB Sông Cửu Long", "day.avgtemp_c": "32", "day.totalprecip_mm": "0", "day.maxwind_kph": "10", "day.avgvis_km": "10", "astro.sunrise": "05:35 AM", "astro.sunset": "06:15 PM" },
-      { "date": "2026-05-19", "location.region": "ĐB Sông Cửu Long", "day.avgtemp_c": "33", "day.totalprecip_mm": "4", "day.maxwind_kph": "18", "day.avgvis_km": "9", "astro.sunrise": "05:35 AM", "astro.sunset": "06:15 PM" },
-      { "date": "2026-05-20", "location.region": "ĐB Sông Cửu Long", "day.avgtemp_c": "32", "day.totalprecip_mm": "15", "day.maxwind_kph": "22", "day.avgvis_km": "7", "astro.sunrise": "05:36 AM", "astro.sunset": "06:16 PM" },
-      { "date": "2026-05-21", "location.region": "ĐB Sông Cửu Long", "day.avgtemp_c": "30", "day.totalprecip_mm": "8", "day.maxwind_kph": "15", "day.avgvis_km": "9", "astro.sunrise": "05:36 AM", "astro.sunset": "06:16 PM" },
-      { "date": "2026-05-22", "location.region": "ĐB Sông Cửu Long", "day.avgtemp_c": "31", "day.totalprecip_mm": "2", "day.maxwind_kph": "11", "day.avgvis_km": "10", "astro.sunrise": "05:37 AM", "astro.sunset": "06:17 PM" },
-      
-      { "date": "2026-05-18", "location.region": "Tây Nguyên", "day.avgtemp_c": "24", "day.totalprecip_mm": "8", "day.maxwind_kph": "20", "day.avgvis_km": "8", "astro.sunrise": "05:25 AM", "astro.sunset": "06:20 PM" },
-      { "date": "2026-05-19", "location.region": "Tây Nguyên", "day.avgtemp_c": "25", "day.totalprecip_mm": "15", "day.maxwind_kph": "25", "day.avgvis_km": "7", "astro.sunrise": "05:25 AM", "astro.sunset": "06:20 PM" },
-      { "date": "2026-05-20", "location.region": "Tây Nguyên", "day.avgtemp_c": "23", "day.totalprecip_mm": "50", "day.maxwind_kph": "45", "day.avgvis_km": "3", "astro.sunrise": "05:26 AM", "astro.sunset": "06:21 PM" },
-      { "date": "2026-05-21", "location.region": "Tây Nguyên", "day.avgtemp_c": "22", "day.totalprecip_mm": "30", "day.maxwind_kph": "30", "day.avgvis_km": "5", "astro.sunrise": "05:26 AM", "astro.sunset": "06:21 PM" },
-      { "date": "2026-05-22", "location.region": "Tây Nguyên", "day.avgtemp_c": "24", "day.totalprecip_mm": "10", "day.maxwind_kph": "15", "day.avgvis_km": "8", "astro.sunrise": "05:27 AM", "astro.sunset": "06:22 PM" }
-    ];
-
     let globalDataset = [];
     let riskNodeByLabel = new Map();
-    let timelineNodeByLabel = new Map();
-    let weatherNodeByLabel = new Map();
+    let rainNodeByLabel = new Map();
+    let windNodeByLabel = new Map();
+    let visionNodeByLabel = new Map();
     let dailyDataGlobal = [];
 
     // Khởi tạo Dashboard
@@ -142,7 +125,6 @@
         processAndAssignData(rawData);
       } catch (e) {
         console.warn("Không tìm thấy dataset.csv, sử dụng dữ liệu mẫu dự phòng để dựng giao diện.");
-        processAndAssignData(mockData);
       }
 
       setupFilterListeners();
@@ -175,8 +157,8 @@
       const uniqueCities = [...new Set(globalDataset.map(d => d["location.name"]))].filter(Boolean);
       const citySelect = document.getElementById("city-select");
       
-      // Xóa các option cũ trừ option đầu tiên
-      while (citySelect.options.length > 1) { citySelect.remove(1); }
+      // Xóa các option cũ
+      citySelect.innerHTML = "";
       
       uniqueCities.forEach(c => {
         const opt = document.createElement("option");
@@ -215,7 +197,6 @@
       document.getElementById("city-select").addEventListener("change", updateDashboard);
       document.getElementById("year-select").addEventListener("change", updateDashboard);
       document.getElementById("month-select").addEventListener("change", updateDashboard);
-      document.getElementById("risk-select").addEventListener("change", updateDashboard);
     }
 
     // Hàm tổng điều phối lọc dữ liệu và vẽ lại biểu đồ
@@ -223,7 +204,6 @@
       const selectedCity = document.getElementById("city-select").value;
       const selectedYear = document.getElementById("year-select").value;
       const selectedMonth = document.getElementById("month-select").value;
-      const selectedRisk = document.getElementById("risk-select").value;
 
       let filteredData = globalDataset;
       if (selectedYear) {
@@ -234,13 +214,9 @@
         filteredData = filteredData.filter(d => d.month === Number(selectedMonth));
       }
 
-      if (selectedCity !== "all") {
+      if (selectedCity) {
         filteredData = filteredData.filter(d => d["location.name"] === selectedCity);
       }
-
-      // Cập nhật nhãn chú thích của biểu đồ Nhiệt độ
-      const legendText = document.getElementById("weather-legend-text");
-      legendText.textContent = selectedCity === "all" ? "Nhiệt độ trung bình toàn quốc (°C)" : `Nhiệt độ thành phố ${selectedCity} (°C)`;
 
       // Xử lý gom nhóm dữ liệu theo ngày
       const dateGroups = d3.groups(filteredData, d => d.date);
@@ -249,7 +225,7 @@
         const rain = d3.mean(records, r => r.rain);
         const wind = d3.mean(records, r => r.wind);
         const vis = d3.mean(records, r => r.vis);
-        const score = Math.max(0, rain + wind - vis);
+        const score = (0.5 * rain + 0.3 * wind + 0.2 * (1 - vis)) * 100;
         
         let level = "low";
         if (score > 35) level = "high";
@@ -267,6 +243,9 @@
           dateStr,
           date: records[0].dateParsed,
           temp,
+          rain,
+          wind,
+          vis,
           score,
           level,
           sunrise,
@@ -274,17 +253,14 @@
           durationHours
         };
       }).sort((a, b) => a.date - b.date);
-
-      if (selectedRisk !== "all") {
-        dailyData = dailyData.filter(d => d.level === selectedRisk);
-      }
       
       dailyDataGlobal = dailyData;
 
-      // Tiến hành dựng lại 3 biểu đồ
-      drawWeatherAreaChart(dailyDataGlobal);
+      // Tiến hành dựng lại biểu đồ
+      drawRainChart(dailyDataGlobal);
+      drawWindChart(dailyDataGlobal);
+      drawVisionChart(dailyDataGlobal);
       drawRiskLineChart(dailyDataGlobal);
-      drawDeliveryBarChart(dailyDataGlobal);
     }
 
     function positionTooltipNearNode(selector, node) {
@@ -304,17 +280,17 @@
     }
 
     function hideTooltips() {
-      d3.selectAll("#weather-tooltip, #risk-tooltip, #timeline-tooltip")
+      d3.selectAll("#rain-tooltip, #wind-tooltip, #vision-tooltip, #risk-tooltip")
         .attr("aria-hidden", "true")
         .style("opacity", 0);
       d3.selectAll(".hover-line").style("opacity", 0);
     }
 
-    function weatherTooltipHtml(d) {
+    function basicTooltipHtml(date, label, value, unit) {
       const formatTime = d3.timeFormat("%d/%m/%Y");
       return `
-        <div class="tooltip-title">${formatTime(d.date)}</div>
-        <div class="tooltip-row"><span>Nhiệt độ</span><strong>${d.temp.toFixed(1)}°C</strong></div>
+        <div class="tooltip-title">${formatTime(date)}</div>
+        <div class="tooltip-row"><span>${label}</span><strong>${value.toFixed(1)} ${unit}</strong></div>
       `;
     }
 
@@ -337,16 +313,6 @@
       `;
     }
 
-    function timelineTooltipHtml(d) {
-      const formatTime = d3.timeFormat("%d/%m/%Y");
-      return `
-        <div class="tooltip-title">${formatTime(d.date)}</div>
-        <div class="tooltip-row"><span>Bình minh</span><strong>${formatTimelineTime(d.sunrise)}</strong></div>
-        <div class="tooltip-row"><span>Hoàng hôn</span><strong>${formatTimelineTime(d.sunset)}</strong></div>
-        <div class="tooltip-row"><span>Thời lượng</span><strong>${d.durationHours.toFixed(1)} giờ</strong></div>
-      `;
-    }
-
     function showLinkedTooltips(dateStr) {
       const dataPoint = dailyDataGlobal.find(d => d.dateStr === dateStr);
       if (!dataPoint) return;
@@ -358,30 +324,37 @@
         d3.select("#risk-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
       }
 
-      const tNode = timelineNodeByLabel.get(dateStr);
-      if (tNode) {
-        showTooltip("#timeline-tooltip", timelineTooltipHtml(dataPoint), tNode);
-        const xPos = parseFloat(d3.select(tNode).attr("x")) + parseFloat(d3.select(tNode).attr("width")) / 2;
-        d3.select("#timeline-hover-line").attr("x1", xPos).attr("x2", xPos).style("opacity", 1);
+      const rnNode = rainNodeByLabel.get(dateStr);
+      if (rnNode) {
+        showTooltip("#rain-tooltip", basicTooltipHtml(dataPoint.date, "Lượng mưa", dataPoint.rain, "mm"), rnNode);
+        const cx = d3.select(rnNode).attr("cx");
+        d3.select("#rain-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
       }
 
-      const wNode = weatherNodeByLabel.get(dateStr);
-      if (wNode) {
-        showTooltip("#weather-tooltip", weatherTooltipHtml(dataPoint), wNode);
-        const cx = d3.select(wNode).attr("cx");
-        d3.select("#weather-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
+      const wnNode = windNodeByLabel.get(dateStr);
+      if (wnNode) {
+        showTooltip("#wind-tooltip", basicTooltipHtml(dataPoint.date, "Sức gió", dataPoint.wind, "km/h"), wnNode);
+        const xPos = parseFloat(d3.select(wnNode).attr("x")) + parseFloat(d3.select(wnNode).attr("width")) / 2;
+        d3.select("#wind-hover-line").attr("x1", xPos).attr("x2", xPos).style("opacity", 1);
+      }
+
+      const vsNode = visionNodeByLabel.get(dateStr);
+      if (vsNode) {
+        showTooltip("#vision-tooltip", basicTooltipHtml(dataPoint.date, "Tầm nhìn", dataPoint.vis, "km"), vsNode);
+        const cx = d3.select(vsNode).attr("cx");
+        d3.select("#vision-hover-line").attr("x1", cx).attr("x2", cx).style("opacity", 1);
       }
     }
 
-    // --- BIỂU ĐỒ 1: AREA CHART ---
-    function drawWeatherAreaChart(displayData) {
-      const containerId = "weather-area-chart";
+    // --- BIỂU ĐỒ LƯỢNG MƯA ---
+    function drawRainChart(displayData) {
+      const containerId = "rain-chart";
       const container = document.getElementById(containerId);
       const width = container.clientWidth;
       const height = container.clientHeight;
       d3.select(`#${containerId}`).selectAll("*").remove();
 
-      weatherNodeByLabel = new Map();
+      rainNodeByLabel = new Map();
 
       const margin = { top: 15, right: 15, bottom: 25, left: 35 };
       const chartW = width - margin.left - margin.right;
@@ -393,49 +366,150 @@
         .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
       const x = d3.scaleTime().domain(d3.extent(displayData, d => d.date)).range([0, chartW]);
-      const y = d3.scaleLinear().domain([0, d3.max(displayData, d => d.temp) + 5 || 40]).range([chartH, 0]).nice();
+      const y = d3.scaleLinear().domain([0, d3.max(displayData, d => d.rain) + 5 || 20]).range([chartH, 0]).nice();
 
-      // Vẽ lưới phụ ẩn nền dạng nét đứt mảnh
       svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(5).tickSize(-chartW).tickFormat(""));
 
-      // Định nghĩa vùng miền (Area) và đường biên mặt trên (Line)
-      const areaGenerator = d3.area().x(d => x(d.date)).y0(chartH).y1(d => y(d.temp)).curve(d3.curveMonotoneX);
-      const lineGenerator = d3.line().x(d => x(d.date)).y(d => y(d.temp)).curve(d3.curveMonotoneX);
+      const areaGenerator = d3.area().x(d => x(d.date)).y0(chartH).y1(d => y(d.rain)).curve(d3.curveMonotoneX);
+      const lineGenerator = d3.line().x(d => x(d.date)).y(d => y(d.rain)).curve(d3.curveMonotoneX);
 
-      // Thêm màu Gradient mượt mà cho miền nhiệt độ
+      // Thêm màu Gradient mượt mà cho miền lượng mưa
       const defs = svg.append("defs");
-      const gradient = defs.append("linearGradient").attr("id", "temp-gradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+      const gradient = defs.append("linearGradient").attr("id", "rain-gradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
       gradient.append("stop").attr("offset", "0%").attr("stop-color", "#3b82f6").attr("stop-opacity", 0.35);
       gradient.append("stop").attr("offset", "100%").attr("stop-color", "#3b82f6").attr("stop-opacity", 0.00);
 
-      svg.append("path").datum(displayData).attr("d", areaGenerator).attr("fill", "url(#temp-gradient)");
+      svg.append("path").datum(displayData).attr("d", areaGenerator).attr("fill", "url(#rain-gradient)");
       svg.append("path").datum(displayData).attr("d", lineGenerator).attr("fill", "none").attr("stroke", "#3b82f6").attr("stroke-width", 2.5);
 
       // Vạch kẻ đứt khi Hover
-      svg.append("line").attr("id", "weather-hover-line").attr("class", "hover-line")
+      svg.append("line").attr("id", "rain-hover-line").attr("class", "hover-line")
         .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
         .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
 
-      svg.selectAll(".weather-dot")
-        .data(displayData).enter().append("circle").attr("class", "weather-dot")
-        .attr("cx", d => x(d.date)).attr("cy", d => y(d.temp)).attr("r", 4)
+      svg.selectAll(".rain-dot")
+        .data(displayData).enter().append("circle").attr("class", "rain-dot")
+        .attr("cx", d => x(d.date)).attr("cy", d => y(d.rain)).attr("r", 4)
         .attr("fill", "#fff")
         .attr("stroke", "#3b82f6")
         .attr("stroke-width", 1.5)
         .each(function(d) {
-          weatherNodeByLabel.set(d.dateStr, this);
+          rainNodeByLabel.set(d.dateStr, this);
         })
         .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
         .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
         .on("mouseout", hideTooltips);
 
-      // Trục Tọa độ
       svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
         .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}/${d.getDate()}`));
-      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5).tickFormat(d => `${d}°`));
+      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5));
     }
 
-    // --- BIỂU ĐỒ 2: RISK LINE CHART ---
+    // --- BIỂU ĐỒ SỨC GIÓ (Bar Chart) ---
+    function drawWindChart(chartData) {
+      const containerId = "wind-chart";
+      const container = document.getElementById(containerId);
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      d3.select(`#${containerId}`).selectAll("*").remove();
+
+      windNodeByLabel = new Map();
+
+      const margin = { top: 15, right: 15, bottom: 25, left: 35 };
+      const chartW = width - margin.left - margin.right;
+      const chartH = height - margin.top - margin.bottom;
+      if (chartW <= 0 || chartH <= 0 || !chartData.length) return;
+
+      const svg = d3.select(`#${containerId}`)
+        .append("svg").attr("width", width).attr("height", height)
+        .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scaleBand().domain(chartData.map(d => d.dateStr)).range([0, chartW]).padding(0.2);
+      const y = d3.scaleLinear().domain([0, d3.max(chartData, d => d.wind) + 5 || 25]).range([chartH, 0]).nice();
+
+      svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(5).tickSize(-chartW).tickFormat(""));
+
+      // Vạch kẻ đứt khi Hover
+      svg.append("line").attr("id", "wind-hover-line").attr("class", "hover-line")
+        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
+        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
+
+      svg.selectAll(".bar")
+        .data(chartData).enter().append("rect").attr("class", "bar")
+        .attr("x", d => x(d.dateStr))
+        .attr("y", d => y(d.wind))
+        .attr("width", x.bandwidth())
+        .attr("height", d => Math.max(0, chartH - y(d.wind)))
+        .attr("fill", "#86efac")
+        .attr("rx", 3)
+        .each(function(d) {
+          windNodeByLabel.set(d.dateStr, this);
+        })
+        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mouseout", hideTooltips);
+
+      svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
+        .call(d3.axisBottom(x).tickValues(x.domain().filter((d,i) => !(i%Math.ceil(chartData.length/6))))
+        .tickFormat(d => {
+          const pt = d3.timeParse("%Y-%m-%d")(d);
+          return pt ? `T${pt.getMonth() + 1}/${pt.getDate()}` : d; 
+        }));
+      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5));
+    }
+
+    // --- BIỂU ĐỒ TẦM NHÌN ---
+    function drawVisionChart(displayData) {
+      const containerId = "vision-chart";
+      const container = document.getElementById(containerId);
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      d3.select(`#${containerId}`).selectAll("*").remove();
+
+      visionNodeByLabel = new Map();
+
+      const margin = { top: 15, right: 15, bottom: 25, left: 35 };
+      const chartW = width - margin.left - margin.right;
+      const chartH = height - margin.top - margin.bottom;
+      if (chartW <= 0 || chartH <= 0 || !displayData.length) return;
+
+      const svg = d3.select(`#${containerId}`)
+        .append("svg").attr("width", width).attr("height", height)
+        .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scaleTime().domain(d3.extent(displayData, d => d.date)).range([0, chartW]);
+      const y = d3.scaleLinear().domain([0, d3.max(displayData, d => d.vis) + 2 || 15]).range([chartH, 0]).nice();
+
+      svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(5).tickSize(-chartW).tickFormat(""));
+
+      const lineGenerator = d3.line().x(d => x(d.date)).y(d => y(d.vis)).curve(d3.curveMonotoneX);
+
+      svg.append("path").datum(displayData).attr("d", lineGenerator).attr("fill", "none").attr("stroke", "#d4d4aa").attr("stroke-width", 2.5);
+
+      // Vạch kẻ đứt khi Hover
+      svg.append("line").attr("id", "vision-hover-line").attr("class", "hover-line")
+        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
+        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
+
+      svg.selectAll(".vision-dot")
+        .data(displayData).enter().append("circle").attr("class", "vision-dot")
+        .attr("cx", d => x(d.date)).attr("cy", d => y(d.vis)).attr("r", 4)
+        .attr("fill", "#fff")
+        .attr("stroke", "#d4d4aa")
+        .attr("stroke-width", 1.5)
+        .each(function(d) {
+          visionNodeByLabel.set(d.dateStr, this);
+        })
+        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
+        .on("mouseout", hideTooltips);
+
+      svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
+        .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}/${d.getDate()}`));
+      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5));
+    }
+
+    // --- BIỂU ĐỒ RISK LINE CHART ---
     function drawRiskLineChart(chartData) {
       const containerId = "risk-line-chart";
       const container = document.getElementById(containerId);
@@ -493,65 +567,6 @@
       svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(5));
       svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
          .call(d3.axisBottom(x).ticks(Math.min(chartW / 65, 6)).tickFormat(d => `T${d.getMonth() + 1}/${d.getDate()}`));
-    }
-
-    // --- BIỂU ĐỒ 3: DELIVERY TIMELINE BAR CHART (X: Day, Y: Cửa sổ thời gian) ---
-    function drawDeliveryBarChart(chartData) {
-      const containerId = "delivery-timeline-chart";
-      const container = document.getElementById(containerId);
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      d3.select(`#${containerId}`).selectAll("*").remove();
-
-      timelineNodeByLabel = new Map();
-
-      const margin = { top: 15, right: 15, bottom: 25, left: 45 };
-      const chartW = width - margin.left - margin.right;
-      const chartH = height - margin.top - margin.bottom;
-      if (chartW <= 0 || chartH <= 0 || !chartData.length) return;
-
-      const svg = d3.select(`#${containerId}`)
-        .append("svg").attr("width", width).attr("height", height)
-        .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-      const x = d3.scaleBand().domain(chartData.map(d => d.dateStr)).range([0, chartW]).padding(0.2);
-      
-      const parseTime = d3.timeParse("%I:%M %p");
-      // Scale Y ngược: sáng sơm ở dưới, chiều tối ở trên; Y coordinates in SVG go from 0 (top) to H (bottom).
-      // So domain [04:00 AM, 08:00 PM] mapped to [chartH, 0] means 8 PM is top.
-      const y = d3.scaleTime().domain([parseTime("04:00 AM"), parseTime("08:00 PM")]).range([chartH, 0]);
-
-      svg.append("g").attr("class", "grid-lines").call(d3.axisLeft(y).ticks(d3.timeHour.every(2)).tickSize(-chartW).tickFormat(""));
-
-      // Vạch kẻ đứt khi Hover
-      svg.append("line").attr("id", "timeline-hover-line").attr("class", "hover-line")
-        .attr("y1", 0).attr("y2", chartH).style("stroke", "#94a3b8").style("stroke-width", 1.5)
-        .style("stroke-dasharray", "4 4").style("opacity", 0).style("pointer-events", "none");
-
-      svg.selectAll(".timeline-bar")
-        .data(chartData).enter().append("rect").attr("class", "timeline-bar")
-        .attr("x", d => x(d.dateStr))
-        // Sunset is later, so smaller Y value (higher position); Sunrise is earlier, larger Y value
-        .attr("y", d => y(d.sunset))
-        .attr("width", x.bandwidth())
-        .attr("height", d => Math.max(0, y(d.sunrise) - y(d.sunset)))
-        .attr("fill", "#14b8a6")
-        .attr("opacity", 0.9)
-        .attr("rx", 3)
-        .each(function(d) {
-          timelineNodeByLabel.set(d.dateStr, this);
-        })
-        .on("mouseover", (event, d) => showLinkedTooltips(d.dateStr))
-        .on("mousemove", (event, d) => showLinkedTooltips(d.dateStr))
-        .on("mouseout", hideTooltips);
-
-      svg.append("g").attr("class", "axis-y").call(d3.axisLeft(y).ticks(d3.timeHour.every(2)).tickFormat(d3.timeFormat("%H:%M")));
-      svg.append("g").attr("transform", `translate(0,${chartH})`).attr("class", "axis-x")
-        .call(d3.axisBottom(x).tickValues(x.domain().filter((d,i) => !(i%Math.ceil(chartData.length/6))))
-        .tickFormat(d => {
-          const pt = d3.timeParse("%Y-%m-%d")(d);
-          return pt ? `T${pt.getMonth() + 1}/${pt.getDate()}` : d; 
-        }));
     }
 
     // Kích hoạt toàn hệ thống bảng điều khiển điều hướng thông minh
