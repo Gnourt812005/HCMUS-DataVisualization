@@ -225,11 +225,11 @@
         const rain = d3.mean(records, r => r.rain);
         const wind = d3.mean(records, r => r.wind);
         const vis = d3.mean(records, r => r.vis);
-        const score = (0.5 * rain + 0.3 * wind + 0.2 * (1 - vis)) * 100;
+        const score = (0.5 * rain + 0.3 * wind + 0.2 * (1 - vis));
         
         let level = "low";
-        if (score > 35) level = "high";
-        else if (score > 15) level = "medium";
+        if (score > 66) level = "high";
+        else if (score > 33) level = "medium";
         
         const parseTime = d3.timeParse("%I:%M %p");
         // Lấy bình minh, hoàng hôn của record đầu tiên trong nhóm
